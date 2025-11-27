@@ -1,0 +1,496 @@
+/* src/styles/global.css */
+
+/* Обнуление стилей */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: Arial, sans-serif;
+  background-color: #f5f5f5;
+  color: #333;
+}
+
+/* Общий стиль для контейнера */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+/* Стили для формы логина */
+.login-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #f5f5f5;
+}
+
+.login-box {
+  background: white;
+  padding: 30px;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  width: 100%;
+  max-width: 400px;
+}
+
+.login-title {
+  font-size: 24px;
+  font-weight: bold;
+  text-align: center;
+  margin-bottom: 20px;
+  color: #333;
+}
+
+.login-error {
+  color: #e74c3c;
+  text-align: center;
+  margin-bottom: 15px;
+}
+
+.login-form label {
+  display: block;
+  margin-bottom: 5px;
+  color: #555;
+}
+
+.login-form input {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  margin-bottom: 15px;
+  font-size: 16px;
+}
+
+.login-form button {
+  width: 100%;
+  padding: 12px;
+  background-color: #3498db;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.login-form button:hover {
+  background-color: #2980b9;
+}
+
+/* Стили для дашборда */
+.dashboard-header {
+  background: white;
+  padding: 15px 20px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.dashboard-title {
+  font-size: 20px;
+  font-weight: bold;
+  color: #333;
+}
+
+.user-info {
+  color: #666;
+}
+
+.logout-btn {
+  background-color: #e74c3c;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.logout-btn:hover {
+  background-color: #c0392b;
+}
+
+.dashboard-main {
+  padding: 20px;
+}
+
+.dashboard-actions-title {
+  font-size: 18px;
+  margin-bottom: 20px;
+  color: #333;
+}
+
+.dashboard-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 20px;
+}
+
+.action-btn {
+  background-color: #3498db;
+  color: white;
+  border: none;
+  padding: 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: center;
+  transition: background-color 0.3s, transform 0.2s;
+  font-size: 16px;
+}
+
+.action-btn:hover {
+  background-color: #2980b9;
+  transform: scale(1.05);
+}
+
+.action-btn.move {
+  background-color: #2ecc71;
+}
+
+.action-btn.move:hover {
+  background-color: #27ae60;
+}
+
+.action-btn.dispose {
+  background-color: #e74c3c;
+}
+
+.action-btn.dispose:hover {
+  background-color: #c0392b;
+}
+
+.action-btn.inventory {
+  background-color: #9b59b6;
+}
+
+.action-btn.inventory:hover {
+  background-color: #8e44ad;
+}
+
+/* Стили для модального окна */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  max-width: 500px;
+  width: 90%;
+}
+
+.modal-title {
+  font-size: 18px;
+  font-weight: bold;
+  margin-bottom: 15px;
+}
+
+.modal-close-btn {
+  background-color: #95a5a6;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-top: 15px;
+}
+
+.modal-close-btn:hover {
+  background-color: #7f8c8d;
+}
+
+.user-info-bar {
+  background-color: #e3f2fd; /* Светло-голубой фон */
+  padding: 10px 15px;
+  border-radius: 6px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+/* src/styles/global.css */
+
+/* ... (все предыдущие стили) ... */
+
+/* === МОДАЛЬНЫЕ ОКНА === */
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px; /* Отступы, чтобы контент не прилипал к краям экрана */
+}
+
+.modal-content {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  max-width: 600px; /* Максимальная ширина */
+  width: 90%; /* Ширина по умолчанию */
+  max-height: 80vh; /* Ограничиваем высоту */
+  overflow-y: auto; /* Прокрутка, если контент большой */
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid #e0e0e0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-title {
+  font-size: 18px;
+  font-weight: bold;
+  color: #333;
+  margin: 0;
+}
+
+.modal-close-btn {
+  background: none;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  color: #999;
+  padding: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background-color 0.2s;
+}
+
+.modal-close-btn:hover {
+  background-color: #f0f0f0;
+  color: #333;
+}
+
+.modal-body {
+  padding: 20px;
+  flex-grow: 1; /* Занимает оставшееся место */
+  display: flex;
+  flex-direction: column;
+}
+
+/* Стили для форм внутри модальных окон */
+.modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 15px; /* Отступы между элементами формы */
+}
+
+.modal-form label {
+  display: block;
+  margin-bottom: 5px;
+  color: #555;
+  font-weight: 500;
+}
+
+.modal-form input,
+.modal-form select,
+.modal-form textarea {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 16px;
+  transition: border-color 0.2s;
+}
+
+.modal-form input:focus,
+.modal-form select:focus,
+.modal-form textarea:focus {
+  outline: none;
+  border-color: #3498db;
+  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+}
+
+.modal-actions {
+  padding: 16px 20px;
+  border-top: 1px solid #e0e0e0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px; /* Отступы между кнопками */
+}
+
+.modal-actions button {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: background-color 0.2s;
+}
+
+.modal-actions button[type="submit"] {
+  background-color: #3498db;
+  color: white;
+}
+
+.modal-actions button[type="submit"]:hover {
+  background-color: #2980b9;
+}
+
+.modal-actions button.cancel {
+  background-color: #95a5a6;
+  color: white;
+}
+
+.modal-actions button.cancel:hover {
+  background-color: #7f8c8d;
+}
+
+/* Стили для сообщений об ошибках и успехе */
+.modal-message {
+  padding: 10px;
+  border-radius: 4px;
+  margin-bottom: 15px;
+}
+
+.modal-message.error {
+  background-color: #fadbd8;
+  color: #c0392b;
+  border: 1px solid #e74c3c;
+}
+
+.modal-message.success {
+  background-color: #d5f5e3;
+  color: #27ae60;
+  border: 1px solid #2ecc71;
+}
+
+/* Стили для таблицы в инвентаре */
+.inventory-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+}
+
+.inventory-table th,
+.inventory-table td {
+  border: 1px solid #ddd;
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.inventory-table th {
+  background-color: #f2f2f2;
+  font-weight: bold;
+}
+
+.inventory-table tr:nth-child(even) {
+  background-color: #f9f9f9;
+}
+
+/* Стили для сканирования */
+.scan-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.scan-input-group input {
+  margin-bottom: 0;
+}
+
+.scan-input-group button {
+  width: 100%;
+  padding: 10px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: background-color 0.2s;
+}
+
+.scan-input-group button.bluetooth {
+  background-color: #2ecc71;
+  color: white;
+}
+
+.scan-input-group button.bluetooth:hover {
+  background-color: #27ae60;
+}
+
+.scan-input-group button.scan {
+  background-color: #3498db;
+  color: white;
+}
+
+.scan-input-group button.scan:hover,
+.scan-input-group button.scan:disabled {
+  background-color: #2980b9;
+}
+
+.scan-input-group button.scan:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Стили для информации о товаре */
+.item-info {
+  background-color: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  padding: 15px;
+  margin-top: 15px;
+}
+
+.item-info h4 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  color: #333;
+  font-weight: bold;
+}
+
+.item-info p {
+  margin: 5px 0;
+  color: #555;
+}
+
+.modal-form-input {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 16px;
+  transition: border-color 0.2s;
+}
+
+.modal-form-input:focus {
+  outline: none;
+  border-color: #3498db;
+  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+}
+
