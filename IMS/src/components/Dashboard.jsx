@@ -3,6 +3,7 @@ import ScanModal from './ScanModal';
 import MoveModal from './MoveModal';
 import DisposeModal from './DisposeModal';
 import InventoryModal from './InventoryModal';
+import AddItemModal from './AddItemModal';
 function Dashboard() {
   const [userInfo, setUserInfo] = useState(null);
   const [activeModal, setActiveModal] = useState(null);
@@ -84,6 +85,14 @@ function Dashboard() {
           >
             📋 Посмотреть товары
           </button>
+
+            <button
+            onClick={() => setActiveModal('add')}
+            className="action-btn"
+            style={{ backgroundColor: '#f39c12' }} // Оранжевый цвет
+            >
+            ➕ Добавить позицию в базу
+        </button>
         </div>
 
         {/* Модальные окна */}
@@ -91,6 +100,7 @@ function Dashboard() {
         {activeModal === 'move' && <MoveModal onClose={() => setActiveModal(null)} token={token} />}
         {activeModal === 'dispose' && <DisposeModal onClose={() => setActiveModal(null)} token={token} />}
         {activeModal === 'inventory' && <InventoryModal onClose={() => setActiveModal(null)} token={token} />}
+        {activeModal === 'add' && <AddItemModal onClose={() => setActiveModal(null)} token={token} />}
       </main>
     </div>
   );

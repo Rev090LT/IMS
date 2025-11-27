@@ -39,4 +39,15 @@ export const Item = {
 
     return result.rows[0];
   },
+
+  create: async (data) => {
+    const { qr_code, name, description, quantity, location } = data;
+    const result = await pool.query(
+      `INSERT INTO items (qr_code, name, description, quantity, location)
+       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [qr_code, name, description, quantity || 1, location] // Убедимся, что quantity не null
+    );
+    return result.rows[0];
+  },
+  
 };

@@ -1,5 +1,6 @@
 const API_BASE = 'http://localhost:3000/api';
 
+// === Аутентификация ===
 export const login = (data) => {
   return fetch(`${API_BASE}/auth/login`, {
     method: 'POST',
@@ -10,8 +11,8 @@ export const login = (data) => {
   });
 };
 
-// Примеры новых функций
-export const scanItem = (qrCode, token) => {
+// === Получить информацию о товаре по QR-коду ===
+export const getItemByQR = (qrCode, token) => {
   return fetch(`${API_BASE}/items/${qrCode}`, {
     headers: {
       'Authorization': `Bearer ${token}`,
@@ -19,8 +20,13 @@ export const scanItem = (qrCode, token) => {
   });
 };
 
+// === Сканирование (получить товар) ===
+// В реальности это тот же запрос, что и getItemByQR
+export const scanItem = getItemByQR;
+
+// === Перемещение товара ===
 export const moveItem = (data, token) => {
-  return fetch(`${API_BASE}/items/move`, { // Предполагаем, что маршрут будет таким
+  return fetch(`${API_BASE}/items/move`, { // Убедитесь, что маршрут существует на бэкенде
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -30,6 +36,7 @@ export const moveItem = (data, token) => {
   });
 };
 
+// === Списание товара ===
 export const disposeItem = (data, token) => {
   return fetch(`${API_BASE}/items/dispose`, {
     method: 'POST',
@@ -41,10 +48,23 @@ export const disposeItem = (data, token) => {
   });
 };
 
+// === Получить все товары (инвентарь) ===
 export const getAllItems = (token) => {
-  return fetch(`${API_BASE}/items`, { // Предполагаем, что маршрут будет таким
+  return fetch(`${API_BASE}/items`, { // Убедитесь, что маршрут существует на бэкенде
     headers: {
       'Authorization': `Bearer ${token}`,
     },
+  });
+};
+
+// === Добавить товар (опционально) ===
+export const createItem = (data, token) => {
+  return fetch(`${API_BASE}/items`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
   });
 };

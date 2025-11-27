@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import pool from './config/db.js'; // Добавим pool, т.к. он используется в /items/
 import authRoutes from './routes/auth.js';
 import itemsRoutes from './routes/items.js';
 
