@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { createItem } from '../services/api'; // Импортируем нашу новую функцию
+import { createItem } from '../services/api'; 
 
 function AddItemModal({ onClose, token }) {
+  console.log('AddItemModal rendered, token:', token); // <= Добавьте это
   const [qrCode, setQrCode] = useState('');
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -12,6 +13,10 @@ function AddItemModal({ onClose, token }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    console.log('handleSubmit called'); // <= Добавьте это
+    console.log('FormData:', { qrCode, name, description, quantity, location }); // <= И это
+    console.log('Token:', token); // <= И это
+
     setError('');
     setSuccess('');
 
@@ -20,7 +25,11 @@ function AddItemModal({ onClose, token }) {
       return;
     }
 
+    console.log('Before calling createItem'); // <= Добавьте это
+    console.log('createItem function:', createItem); // <= И это
+    
     try {
+      console.log('Inside try block'); // <= И это
       const response = await createItem({
         qr_code: qrCode,
         name,
@@ -29,7 +38,9 @@ function AddItemModal({ onClose, token }) {
         location
       }, token);
 
-      const data = await response.json();
+      console.log('Response received:', response); // <= И это
+      const data = await response.json();      
+      console.log('Response ', data); // <= И это
 
       if (response.ok) {
         setSuccess('Item added successfully!');
@@ -113,7 +124,7 @@ function AddItemModal({ onClose, token }) {
 
         <div className="modal-actions">
           <button type="button" onClick={onClose} className="cancel">Cancel</button>
-          <button type="submit">Add Item</button>
+          <button type="button" onClick={handleSubmit}>Add Item</button>
         </div>
       </div>
     </div>

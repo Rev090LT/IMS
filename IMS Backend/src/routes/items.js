@@ -96,4 +96,14 @@ router.post('/', authenticateToken, async (req, res) => {
   }
 });
 
+router.get('/', authenticateToken, async (req, res) => {
+  try {
+    // Простой запрос для получения всех товаров
+    const result = await pool.query('SELECT * FROM items ORDER BY created_at DESC');
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Error fetching items:', err); // Добавим лог
+    res.status(500).json({ error: err.message });
+  }
+});
 export default router;

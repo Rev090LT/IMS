@@ -1,5 +1,5 @@
 import { useState } from 'react';
-// import { scanItem } from '../../services/api'; // Заглушка
+import { scanItem } from '../services/api'; // Заглушка
 
 function ScanModal({ onClose, token }) {
   const [qrCode, setQrCode] = useState('');
@@ -18,18 +18,11 @@ function ScanModal({ onClose, token }) {
     setItemInfo(null);
 
     try {
-      // const response = await scanItem(qrCode, token);
-      // const data = await response.json();
-      // if (response.ok) setItemInfo(data);
+      const response = await scanItem(qrCode, token);
+      const data = await response.json();
+      if (response.ok) setItemInfo(data);
 
       // Временная заглушка
-      setItemInfo({
-        qr_code: qrCode,
-        name: 'Sample Item',
-        quantity: 5,
-        status: 'warehouse',
-        location: 'A1-05'
-      });
     } catch (err) {
       setError('Failed to fetch item info');
       console.error(err);

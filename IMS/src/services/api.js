@@ -59,6 +59,7 @@ export const getAllItems = (token) => {
 
 // === Добавить товар (опционально) ===
 export const createItem = (data, token) => {
+  console.log('Sending token:', token); // <= Добавьте это для отладки
   return fetch(`${API_BASE}/items`, {
     method: 'POST',
     headers: {
@@ -66,5 +67,6 @@ export const createItem = (data, token) => {
       'Authorization': `Bearer ${token}`,
     },
     body: JSON.stringify(data),
-  });
+  }); 
 };
+

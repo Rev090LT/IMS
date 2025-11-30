@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-// import { getAllItems } from '../../services/api'; // Заглушка
+import { getAllItems } from '../services/api'; // Заглушка
 
 function InventoryModal({ onClose, token }) {
   const [items, setItems] = useState([]);
@@ -7,29 +7,27 @@ function InventoryModal({ onClose, token }) {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    const fetchItems = async () => {
+const fetchItems = async () => {
       try {
-        // const response = await getAllItems(token);
-        // const data = await response.json();
-        // if (response.ok) {
-        //   setItems(data);
-        // } else {
-        //   setError(data.error || 'Failed to fetch items');
-        // }
+        console.log('Fetching items...'); // Лог для отладки
+        const response = await getAllItems(token);
 
-        // Временная заглушка
-        setItems([
-          { id: 1, qr_code: 'ABC123', name: 'Laptop', quantity: 5, status: 'warehouse', location: 'A1-05' },
-          { id: 2, qr_code: 'DEF456', name: 'Mouse', quantity: 10, status: 'production', location: 'B2-03' },
-        ]);
+        console.log('Response status:', response.status); // Лог статуса
+        const data = await response.json();
+        console.log('Response data:', data); // Лог данных
+
+        if (response.ok) {
+          setItems(data);
+        } else {
+          setError(data.error || 'Failed to fetch items');
+        }
       } catch (err) {
+        console.error('Error fetching items:', err); // Лог ошибки
         setError('Network error or server is unreachable');
-        console.error(err);
       } finally {
         setLoading(false);
       }
     };
-
     fetchItems();
   }, [token]);
 

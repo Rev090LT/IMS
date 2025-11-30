@@ -1,5 +1,5 @@
 import { useState } from 'react';
-// import { disposeItem } from '../../services/api'; // Заглушка
+import { disposeItem } from '../services/api'; // Заглушка
 
 function DisposeModal({ onClose, token }) {
   const [qrCode, setQrCode] = useState('');
@@ -18,15 +18,15 @@ function DisposeModal({ onClose, token }) {
     }
 
     try {
-      // const response = await disposeItem({ qr_code: qrCode, quantity }, token);
-      // const data = await response.json();
-      // if (response.ok) {
-      //   setSuccess('Item disposed successfully');
-      //   setQrCode('');
-      //   setQuantity(1);
-      // } else {
-      //   setError(data.error || 'Failed to dispose item');
-      // }
+      const response = await disposeItem({ qr_code: qrCode, quantity }, token);
+      const data = await response.json();
+      if (response.ok) {
+        setSuccess('Item disposed successfully');
+        setQrCode('');
+        setQuantity(1);
+      } else {
+        setError(data.error || 'Failed to dispose item');
+      }
 
       // Временная заглушка
       setSuccess('Item disposed successfully (mock)');
@@ -76,7 +76,7 @@ function DisposeModal({ onClose, token }) {
 
         <div className="modal-actions">
           <button type="button" onClick={onClose} className="cancel">Cancel</button>
-          <button type="submit">Dispose Item</button>
+          <button type="button" onClick={handleSubmit}>Dispose Item</button>
         </div>
       </div>
     </div>

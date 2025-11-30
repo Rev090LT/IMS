@@ -23,8 +23,7 @@ function App() {
         <Routes>
           <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
           <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
-          
-          {/* Добавим новые маршруты */}
+                    
           <Route path="/scan" element={<PrivateRoute><ScanPage /></PrivateRoute>} />
           <Route path="/move" element={<PrivateRoute><MovePage /></PrivateRoute>} />
           <Route path="/dispose" element={<PrivateRoute><DisposePage /></PrivateRoute>} />
