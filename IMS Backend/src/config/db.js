@@ -5,7 +5,7 @@ const { Pool } = pg;
 const pool = new Pool({
   host: process.env.DB_HOST || 'localhost',
   user: process.env.DB_USER || 'inventory_user',
-  password: process.env.DB_PASSWORD || 'CharlySays',
+  password: process.env.DB_PASSWORD || 'dimebag',
   database: process.env.DB_NAME || 'inventory_db',
   port: 5432,
 });

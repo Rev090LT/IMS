@@ -59,7 +59,7 @@ export const getAllItems = (token) => {
 
 // === Добавить товар (опционально) ===
 export const createItem = (data, token) => {
-  console.log('Sending token:', token); // <= Добавьте это для отладки
+  console.log('Sending create item request with ', data, 'and token:', token); // Добавьте логconsole.log('Sending create item request with ', data, 'and token:', token); // Добавьте лог
   return fetch(`${API_BASE}/items`, {
     method: 'POST',
     headers: {
@@ -70,3 +70,24 @@ export const createItem = (data, token) => {
   }); 
 };
 
+// === Получить все локации ===
+export const getAllLocations = (token) => {
+  console.log('Fetching locations with token:', token);
+  return fetch(`${API_BASE}/locations`, { // или /locations, если вы перенесли маршрут
+    headers: {
+      'Authorization': `Bearer ${token}`,
+    },
+  });
+};
+
+export const createLocation = (data, token) => {
+  console.log('Sending create location request with ', data, 'and token:', token);
+  return fetch(`${API_BASE}/locations`, { // Убедитесь, что маршрут совпадает с бэкендом
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+};

@@ -1,46 +1,65 @@
-import { useState } from 'react';
-import { createItem } from '../services/api'; 
+import { useState, useEffect } from 'react';
+import { createItem, getAllLocations } from '../services/api';
+import AddLocationModal from './AddLocationModal'; // Импортируем, если будем вставлять внутрь
 
 function AddItemModal({ onClose, token }) {
-  console.log('AddItemModal rendered, token:', token); // <= Добавьте это
   const [qrCode, setQrCode] = useState('');
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [quantity, setQuantity] = useState(1);
-  const [location, setLocation] = useState('');
+  const [locationId, setLocationId] = useState(''); // Теперь ID локации
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [locations, setLocations] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadingLocations, setLoadingLocations] = useState(false); // Для обновления списка
+  const [showAddLocationModal, setShowAddLocationModal] = useState(false); // Для открытия всплывающего окна
+
+  // Загружаем локации при монтировании
+  useEffect(() => {
+    const fetchLocations = async () => {
+      try {
+        setLoading(true);
+        const response = await getAllLocations(token);
+        const data = await response.json();
+        if (response.ok) {
+          setLocations(data);
+        } else {
+          setError(data.error || 'Failed to fetch locations');
+        }
+      } catch (err) {
+        setError('Network error or server is unreachable');
+        console.error('Error fetching locations:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchLocations();
+  }, [token]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log('handleSubmit called'); // <= Добавьте это
-    console.log('FormData:', { qrCode, name, description, quantity, location }); // <= И это
-    console.log('Token:', token); // <= И это
-
+    console.log('FormData:', { qrCode, name, description, quantity, locationId }); // <= Добавьте этот лог
+    console.log('locationId type:', typeof locationId, 'value:', locationId); // <= И этот
     setError('');
     setSuccess('');
 
-    if (!qrCode || !name || !quantity || quantity <= 0) {
-      setError('QR Code, Name, and Quantity are required');
+    if (!qrCode || !name || !quantity || quantity <= 0 || !locationId) {
+      setError('QR Code, Name, Quantity, and Location are required');
       return;
     }
 
-    console.log('Before calling createItem'); // <= Добавьте это
-    console.log('createItem function:', createItem); // <= И это
-    
     try {
-      console.log('Inside try block'); // <= И это
       const response = await createItem({
         qr_code: qrCode,
         name,
         description,
         quantity: parseInt(quantity),
-        location
+        location_id: parseInt(locationId) // Отправляем ID локации
       }, token);
 
-      console.log('Response received:', response); // <= И это
-      const data = await response.json();      
-      console.log('Response ', data); // <= И это
+      const data = await response.json();
 
       if (response.ok) {
         setSuccess('Item added successfully!');
@@ -49,15 +68,37 @@ function AddItemModal({ onClose, token }) {
         setName('');
         setDescription('');
         setQuantity(1);
-        setLocation('');
+        setLocationId(''); // Очищаем выбор локации
       } else {
         setError(data.error || 'Failed to add item');
       }
     } catch (err) {
       setError('Network error or server is unreachable');
-      console.error(err);
+      console.error('Error during add item:', err);
     }
   };
+
+  // Функция для обновления списка локаций (вызывается из AddLocationModal)
+  const handleLocationAdded = (newLocation) => {
+    setLocations(prev => [...prev, newLocation]); // Добавляем новую локацию в список
+    setLocationId(newLocation.id.toString()); // Автоматически выбираем новую локацию
+    setShowAddLocationModal(false); // Закрываем модальное окно добавления локации
+  };
+
+  // Функция для открытия модального окна добавления локации
+  const handleAddLocationClick = () => {
+    setShowAddLocationModal(true);
+  };
+
+  if (loading) {
+    return (
+      <div className="modal-overlay">
+        <div className="modal-content">
+          <p>Loading locations...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="modal-overlay">
@@ -113,11 +154,28 @@ function AddItemModal({ onClose, token }) {
 
             <div>
               <label>Location:</label>
-              <input
-                type="text"
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-              />
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                <select
+                  value={locationId}
+                  onChange={(e) => setLocationId(e.target.value)}
+                  required
+                  style={{ flex: 1 }}
+                >
+                  <option value="">Select a location</option>
+                  {locations.map(location => (
+                    <option key={location.id} value={location.id}>
+                      {location.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={handleAddLocationClick}
+                  className="add-location-btn" // Можно стилизовать отдельно
+                >
+                  +
+                </button>
+              </div>
             </div>
           </form>
         </div>
@@ -127,6 +185,15 @@ function AddItemModal({ onClose, token }) {
           <button type="button" onClick={handleSubmit}>Add Item</button>
         </div>
       </div>
+
+      {/* Всплывающее модальное окно для добавления локации */}
+      {showAddLocationModal && (
+        <AddLocationModal
+          onClose={() => setShowAddLocationModal(false)}
+          token={token}
+          onLocationAdded={handleLocationAdded} // Передаём функцию для обновления списка
+        />
+      )}
     </div>
   );
 }

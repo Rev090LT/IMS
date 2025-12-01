@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getAllItems } from '../services/api'; // Заглушка
+import { getAllItems } from '../services/api';
 
 function InventoryModal({ onClose, token }) {
   const [items, setItems] = useState([]);
@@ -7,14 +7,14 @@ function InventoryModal({ onClose, token }) {
   const [error, setError] = useState('');
 
   useEffect(() => {
-const fetchItems = async () => {
+    const fetchItems = async () => {
       try {
-        console.log('Fetching items...'); // Лог для отладки
+        console.log('Fetching items...');
         const response = await getAllItems(token);
 
-        console.log('Response status:', response.status); // Лог статуса
+        console.log('Response status:', response.status);
         const data = await response.json();
-        console.log('Response data:', data); // Лог данных
+        console.log('Response ', data);
 
         if (response.ok) {
           setItems(data);
@@ -22,16 +22,35 @@ const fetchItems = async () => {
           setError(data.error || 'Failed to fetch items');
         }
       } catch (err) {
-        console.error('Error fetching items:', err); // Лог ошибки
+        console.error('Error fetching items:', err);
         setError('Network error or server is unreachable');
       } finally {
         setLoading(false);
       }
     };
+
     fetchItems();
   }, [token]);
 
-  return (
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleString();
+  };
+
+  const getStatusStyle = (status) => {
+    switch (status) {
+      case 'warehouse':
+        return { backgroundColor: '#d5f5e3', color: '#27ae60' };
+      case 'production':
+        return { backgroundColor: '#fdeaa7', color: '#f39c12' };
+      case 'disposed':
+        return { backgroundColor: '#fadbd8', color: '#c0392b' };
+      default:
+        return { backgroundColor: '#ecf0f1', color: '#7f8c8d' };
+    }
+  };
+
+return (
     <div className="modal-overlay">
       <div className="modal-content">
         <div className="modal-header">
@@ -43,30 +62,53 @@ const fetchItems = async () => {
           {error && <div className="modal-message error">{error}</div>}
 
           {loading ? (
-            <p>Loading...</p>
+            <p>Loading inventory...</p>
           ) : (
-            <table className="inventory-table">
-              <thead>
-                <tr>
-                  <th>QR Code</th>
-                  <th>Name</th>
-                  <th>Quantity</th>
-                  <th>Status</th>
-                  <th>Location</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map(item => (
-                  <tr key={item.id}>
-                    <td>{item.qr_code}</td>
-                    <td>{item.name}</td>
-                    <td>{item.quantity}</td>
-                    <td>{item.status}</td>
-                    <td>{item.location}</td>
+            <div className="inventory-table-container">
+              <table className="inventory-table">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>QR Code</th>
+                    <th>Name</th>
+                    <th>Description</th>
+                    <th>Quantity</th>
+                    <th>Status</th>
+                    <th>Location</th> 
+                    <th>Created By</th>
+                    <th>Created At</th>
+                    <th>Updated At</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {items.length > 0 ? (
+                    items.map(item => (
+                      <tr key={item.id}>
+                        <td>{item.id}</td>
+                        <td>{item.qr_code}</td>
+                        <td>{item.name}</td>
+                        <td>{item.description || 'N/A'}</td>
+                        <td>{item.quantity}</td>
+                        <td>
+                          <span className="status-badge" style={getStatusStyle(item.status)}>
+                            {item.status}
+                          </span>
+                        </td>
+                        <td>{item.location_name || 'N/A'}</td>
+                        {/* Отображаем имя создателя */}
+                        <td>{item.created_by_username || 'N/A'}</td>
+                        <td>{formatDate(item.created_at)}</td>
+                        <td>{formatDate(item.updated_at)}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan="10" style={{ textAlign: 'center' }}>No items found</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
 
