@@ -530,3 +530,303 @@ body {
 .add-location-btn:hover {
   background-color: #27ae60;
 }
+/* src/styles/global.css */
+
+/* ... (все предыдущие стили) ... */
+
+/* === СТИЛИ ДЛЯ ДАШБОРДА (обновляем) === */
+
+/* === Стили для дашборда === */
+
+.dashboard-layout {
+  min-height: 100vh;
+  background-color: #f5f5f5;
+  font-family: Arial, sans-serif;
+  color: #333;
+  display: flex;
+  flex-direction: column;
+}
+
+.dashboard-not-authenticated {
+  padding: 20px;
+  text-align: center;
+  color: #e74c3c;
+}
+
+.dashboard-header {
+  background-color: white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  padding: 15px 20px;
+}
+
+.dashboard-header-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.dashboard-title {
+  font-size: 20px;
+  font-weight: bold;
+  color: #333;
+}
+
+/* Отодвинем информацию о пользователе от заголовка */
+.dashboard-user-info-bar {
+  max-width: 1200px;
+  margin: 20px auto 0;
+  padding: 0 20px;
+  text-align: left;
+}
+
+.user-info-text {
+  color: #666;
+  font-size: 16px;
+}
+
+/* Основной контент - растягиваем на оставшееся место */
+.dashboard-main-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Новый класс: растягиваем на оставшееся место */
+.dashboard-main-content-flex {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.dashboard-section-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 20px;
+}
+
+.dashboard-section-group {
+  margin-bottom: 30px;
+}
+
+.dashboard-subsection-title {
+  font-size: 16px;
+  font-weight: 500;
+  color: #555;
+  margin-bottom: 15px;
+}
+
+.dashboard-buttons-grid {
+  display: grid;
+  gap: 20px;
+}
+
+/* Сетка для Scan, Move, Dispose - теперь три широкие кнопки */
+.dashboard-grid-three-wide {
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 640px) {
+  .dashboard-grid-three-wide {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .dashboard-grid-three-wide {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* Сетка для View & History */
+.dashboard-grid-three {
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 640px) {
+  .dashboard-grid-three {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .dashboard-grid-three {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* Сетка для Management */
+.dashboard-grid-two {
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 640px) {
+  .dashboard-grid-two {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Стили для широких кнопок */
+.dashboard-button-wide {
+  min-height: 140px;
+  font-size: 18px;
+  padding: 25px;
+}
+
+/* Контейнер для кнопок в группах "View & History" и "Management" */
+.dashboard-button-container {
+  display: flex;
+  align-items: stretch; /* Растягиваем по высоте */
+  justify-content: center;
+  height: 100%; /* Занимаем всю высоту ячейки сетки */
+}
+
+.dashboard-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: center;
+  transition: background-color 0.3s, transform 0.2s ease;
+  color: white;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  width: 100%;
+  min-height: 120px;
+}
+
+.dashboard-button:hover {
+  transform: scale(1.05);
+}
+
+.dashboard-button-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.dashboard-button-icon {
+  font-size: 24px;
+  margin-bottom: 8px;
+}
+
+.dashboard-button-label {
+  font-weight: 500;
+  margin: 0;
+}
+
+/* Цвета для кнопок */
+.dashboard-button-scan {
+  background-color: #3498db;
+}
+
+.dashboard-button-scan:hover {
+  background-color: #2980b9;
+}
+
+.dashboard-button-move {
+  background-color: #2ecc71;
+}
+
+.dashboard-button-move:hover {
+  background-color: #27ae60;
+}
+
+.dashboard-button-dispose {
+  background-color: #e74c3c;
+}
+
+.dashboard-button-dispose:hover {
+  background-color: #c0392b;
+}
+
+.dashboard-button-inventory {
+  background-color: #9b59b6;
+}
+
+.dashboard-button-inventory:hover {
+  background-color: #8e44ad;
+}
+
+.dashboard-button-history {
+  background-color: #34495e;
+}
+
+.dashboard-button-history:hover {
+  background-color: #2c3e50;
+}
+
+.dashboard-button-add-location {
+  background-color: #1abc9c;
+}
+
+.dashboard-button-add-location:hover {
+  background-color: #16a085;
+}
+
+.dashboard-button-add {
+  background-color: #f39c12;
+}
+
+.dashboard-button-add:hover {
+  background-color: #d35400;
+}
+
+/* Контейнер для кнопки Logout */
+.dashboard-logout-container {
+  margin-top: auto;
+  padding: 20px;
+  text-align: center;
+}
+
+.logout-btn {
+  background-color: #e74c3c;
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+  font-size: 16px;
+  width: 100%;
+  max-width: 200px;
+  margin: 0 auto;
+}
+
+.logout-btn:hover {
+  background-color: #c0392b;
+}
+
+.dashboard-button-add {
+  background-color: #f39c12;
+}
+
+.dashboard-button-add:hover {
+  background-color: #d35400;
+}
+
+.dashboard-button-add {
+  background-color: #f39c12;
+}
+
+.dashboard-button-add:hover {
+  background-color: #d35400;
+}
+
+/* НОВЫЙ СТИЛЬ ДЛЯ КНОПКИ ПЕЧАТИ */
+.dashboard-button-print-label {
+  background-color: #95a5a6; /* Серый цвет */
+}
+
+.dashboard-button-print-label:hover {
+  background-color: #7f8c8d; /* Темнее при наведении */
+}
+  
+/* ... (остальные стили из global.css) ... */

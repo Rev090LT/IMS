@@ -26,7 +26,7 @@ export const scanItem = getItemByQR;
 
 // === Перемещение товара ===
 export const moveItem = (data, token) => {
-  return fetch(`${API_BASE}/items/move`, { // Убедитесь, что маршрут существует на бэкенде
+  return fetch(`${API_BASE}/items/move`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -89,5 +89,13 @@ export const createLocation = (data, token) => {
       'Authorization': `Bearer ${token}`,
     },
     body: JSON.stringify(data),
+  });
+};
+
+export const getMovementHistory = (token) => {
+  return fetch(`${API_BASE}/movements`, { // Убедитесь, что маршрут существует на бэкенде
+    headers: {
+      'Authorization': `Bearer ${token}`,
+    },
   });
 };
