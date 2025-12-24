@@ -39,7 +39,7 @@ function AddLocationModal({ onClose, token, onLocationAdded }) { // Приним
     <div className="modal-overlay">
       <div className="modal-content">
         <div className="modal-header">
-          <h3 className="modal-title">Add New Location</h3>
+          <h3 className="modal-title">Добавить склад</h3>
           <button onClick={onClose} className="modal-close-btn">&times;</button>
         </div>
 
@@ -49,7 +49,7 @@ function AddLocationModal({ onClose, token, onLocationAdded }) { // Приним
 
           <form onSubmit={handleSubmit} className="modal-form">
             <div>
-              <label>Name:</label>
+              <label>Имя:</label>
               <input
                 type="text"
                 value={name}
@@ -59,7 +59,7 @@ function AddLocationModal({ onClose, token, onLocationAdded }) { // Приним
             </div>
 
             <div>
-              <label>Description:</label>
+              <label>Описание:</label>
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
@@ -69,8 +69,8 @@ function AddLocationModal({ onClose, token, onLocationAdded }) { // Приним
         </div>
 
         <div className="modal-actions">
-          <button type="button" onClick={onClose} className="cancel">Cancel</button>
-          <button type="button" onClick={handleSubmit}>Add location</button>
+          <button type="button" onClick={onClose} className="cancel">Отмена</button>
+          <button type="button" onClick={handleSubmit}>Добавить</button>
         </div>
       </div>
     </div>

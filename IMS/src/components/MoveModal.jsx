@@ -20,7 +20,7 @@ function MoveModal({ onClose, token }) {
         if (response.ok) {
           setLocations(data);
         } else {
-          setError(data.error || 'Failed to fetch locations');
+          setError(data.error || 'Ошибка загрузки складов');
         }
       } catch (err) {
         setError('Network error or server is unreachable');
@@ -59,7 +59,7 @@ function MoveModal({ onClose, token }) {
       const data = await response.json();
 
       if (response.ok) {
-        setSuccess('Item moved successfully!');
+        setSuccess('Товар перемещен успешно');
         // Очищаем форму
         setQrCode('');
         setFromLocationId('');
@@ -78,7 +78,7 @@ function MoveModal({ onClose, token }) {
     <div className="modal-overlay">
       <div className="modal-content">
         <div className="modal-header">
-          <h3 className="modal-title">Move Item</h3>
+          <h3 className="modal-title">Переместить позицию</h3>
           <button onClick={onClose} className="modal-close-btn">&times;</button>
         </div>
 
@@ -87,11 +87,11 @@ function MoveModal({ onClose, token }) {
           {success && <div className="modal-message success">{success}</div>}
 
           {loading ? (
-            <p>Loading locations...</p>
+            <p>Загрузка складов...</p>
           ) : (
             <form onSubmit={handleSubmit} className="modal-form">
               <div>
-                <label>QR Code:</label>
+                <label>QR код:</label>
                 <input
                   type="text"
                   value={qrCode}
@@ -101,13 +101,13 @@ function MoveModal({ onClose, token }) {
               </div>
 
               <div>
-                <label>From Location:</label>
+                <label>Переместить из:</label>
                 <select
                   value={fromLocationId}
                   onChange={(e) => setFromLocationId(e.target.value)}
                   required
                 >
-                  <option value="">Select a location</option>
+                  <option value="">Выберите склад</option>
                   {locations.map(location => (
                     <option key={location.id} value={location.id}>
                       {location.name}
@@ -117,13 +117,13 @@ function MoveModal({ onClose, token }) {
               </div>
 
               <div>
-                <label>To Location:</label>
+                <label>Переместить в:</label>
                 <select
                   value={toLocationId}
                   onChange={(e) => setToLocationId(e.target.value)}
                   required
                 >
-                  <option value="">Select a location</option>
+                  <option value="">Выбрать склад</option>
                   {locations.map(location => (
                     <option key={location.id} value={location.id}>
                       {location.name}
@@ -133,7 +133,7 @@ function MoveModal({ onClose, token }) {
               </div>
 
               <div>
-                <label>Quantity:</label>
+                <label>Количество:</label>
                 <input
                   type="number"
                   value={quantity}
@@ -147,8 +147,8 @@ function MoveModal({ onClose, token }) {
         </div>
 
         <div className="modal-actions">
-          <button type="button" onClick={onClose} className="cancel">Cancel</button>
-          <button type="button" onClick={handleSubmit}>Move item</button>
+          <button type="button" onClick={onClose} className="cancel">Отмена</button>
+          <button type="button" onClick={handleSubmit}>Переместить</button>
         </div>
       </div>
     </div>

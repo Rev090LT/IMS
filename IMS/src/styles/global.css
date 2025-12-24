@@ -829,4 +829,19 @@ body {
   background-color: #7f8c8d; /* Темнее при наведении */
 }
   
+.generate-qr-btn {
+  background-color: #3498db; /* Синий цвет */
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.3s;
+}
+
+.generate-qr-btn:hover {
+  background-color: #2980b9; /* Темнее при наведении */
+}
+
 /* ... (остальные стили из global.css) ... */

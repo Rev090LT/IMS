@@ -54,7 +54,7 @@ return (
     <div className="modal-overlay">
       <div className="modal-content">
         <div className="modal-header">
-          <h3 className="modal-title">Inventory List</h3>
+          <h3 className="modal-title">Журнал склада</h3>
           <button onClick={onClose} className="modal-close-btn">&times;</button>
         </div>
 
@@ -62,22 +62,22 @@ return (
           {error && <div className="modal-message error">{error}</div>}
 
           {loading ? (
-            <p>Loading inventory...</p>
+            <p>Загрузка журнала...</p>
           ) : (
             <div className="inventory-table-container">
               <table className="inventory-table">
                 <thead>
                   <tr>
                     <th>ID</th>
-                    <th>QR Code</th>
-                    <th>Name</th>
-                    <th>Description</th>
-                    <th>Quantity</th>
-                    <th>Status</th>
-                    <th>Location</th> 
-                    <th>Created By</th>
-                    <th>Created At</th>
-                    <th>Updated At</th>
+                    <th>QR код</th>
+                    <th>Имя</th>
+                    <th>Описание</th>
+                    <th>Количество</th>
+                    <th>Статус</th>
+                    <th>Местоположение</th> 
+                    <th>Создано</th>
+                    <th>Дата создания</th>
+                    <th>Дата обновления</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -103,7 +103,7 @@ return (
                     ))
                   ) : (
                     <tr>
-                      <td colSpan="10" style={{ textAlign: 'center' }}>No items found</td>
+                      <td colSpan="10" style={{ textAlign: 'center' }}>Нет позиций</td>
                     </tr>
                   )}
                 </tbody>

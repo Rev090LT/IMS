@@ -42,7 +42,7 @@ function DisposeModal({ onClose, token }) {
     <div className="modal-overlay">
       <div className="modal-content">
         <div className="modal-header">
-          <h3 className="modal-title">Dispose Item</h3>
+          <h3 className="modal-title">Удалить позицию</h3>
           <button onClick={onClose} className="modal-close-btn">&times;</button>
         </div>
 
@@ -52,7 +52,7 @@ function DisposeModal({ onClose, token }) {
 
           <form onSubmit={handleSubmit} className="modal-form">
             <div>
-              <label>QR Code:</label>
+              <label>QR код:</label>
               <input
                 type="text"
                 value={qrCode}
@@ -62,7 +62,7 @@ function DisposeModal({ onClose, token }) {
             </div>
 
             <div>
-              <label>Quantity:</label>
+              <label>Количество:</label>
               <input
                 type="number"
                 value={quantity}
@@ -75,8 +75,8 @@ function DisposeModal({ onClose, token }) {
         </div>
 
         <div className="modal-actions">
-          <button type="button" onClick={onClose} className="cancel">Cancel</button>
-          <button type="button" onClick={handleSubmit}>Dispose Item</button>
+          <button type="button" onClick={onClose} className="cancel">Отмена</button>
+          <button type="button" onClick={handleSubmit}>Списать</button>
         </div>
       </div>
     </div>

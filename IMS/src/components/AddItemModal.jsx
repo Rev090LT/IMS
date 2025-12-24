@@ -15,6 +15,17 @@ function AddItemModal({ onClose, token }) {
   const [loadingLocations, setLoadingLocations] = useState(false); // Для обновления списка
   const [showAddLocationModal, setShowAddLocationModal] = useState(false); // Для открытия всплывающего окна
 
+
+  const generateRandomQRCode = () => {
+    // Генерируем 5 случайных цифр
+    let randomPart = '';
+    for (let i = 0; i < 5; i++) {
+      randomPart += Math.floor(Math.random() * 10); // 0-9
+    }
+    const newQRCode = `200000${randomPart}`;
+    setQrCode(newQRCode);
+  };
+
   // Загружаем локации при монтировании
   useEffect(() => {
     const fetchLocations = async () => {
@@ -62,7 +73,7 @@ function AddItemModal({ onClose, token }) {
       const data = await response.json();
 
       if (response.ok) {
-        setSuccess('Item added successfully!');
+        setSuccess('Позиция добавлена');
         // Очищаем форму
         setQrCode('');
         setName('');
@@ -70,7 +81,7 @@ function AddItemModal({ onClose, token }) {
         setQuantity(1);
         setLocationId(''); // Очищаем выбор локации
       } else {
-        setError(data.error || 'Failed to add item');
+        setError(data.error || 'Ошибка добавления позиции');
       }
     } catch (err) {
       setError('Network error or server is unreachable');
@@ -104,7 +115,7 @@ function AddItemModal({ onClose, token }) {
     <div className="modal-overlay">
       <div className="modal-content">
         <div className="modal-header">
-          <h3 className="modal-title">Add New Item</h3>
+          <h3 className="modal-title">Добавить позицию</h3>
           <button onClick={onClose} className="modal-close-btn">&times;</button>
         </div>
 
@@ -114,17 +125,28 @@ function AddItemModal({ onClose, token }) {
 
           <form onSubmit={handleSubmit} className="modal-form">
             <div>
-              <label>QR Code:</label>
-              <input
-                type="text"
-                value={qrCode}
-                onChange={(e) => setQrCode(e.target.value)}
-                required
-              />
+              <label>QR Код:</label>
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                <input
+                  type="text"
+                  value={qrCode}
+                  onChange={(e) => setQrCode(e.target.value)}
+                  required
+                  placeholder="Введите или сгенерируйте QR код"
+                  style={{ flex: 1 }}
+                />
+                <button
+                  type="button" // ВАЖНО: type="button", а не type="submit"
+                  onClick={generateRandomQRCode}
+                  className="generate-qr-btn" // Можно добавить стиль
+                >
+                  Сгенерировать QR
+                </button>
+              </div>
             </div>
 
             <div>
-              <label>Name:</label>
+              <label>Наименование:</label>
               <input
                 type="text"
                 value={name}
@@ -134,7 +156,7 @@ function AddItemModal({ onClose, token }) {
             </div>
 
             <div>
-              <label>Description:</label>
+              <label>Описание:</label>
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
@@ -142,7 +164,7 @@ function AddItemModal({ onClose, token }) {
             </div>
 
             <div>
-              <label>Quantity:</label>
+              <label>Количество:</label>
               <input
                 type="number"
                 value={quantity}
@@ -153,47 +175,30 @@ function AddItemModal({ onClose, token }) {
             </div>
 
             <div>
-              <label>Location:</label>
-              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                <select
-                  value={locationId}
-                  onChange={(e) => setLocationId(e.target.value)}
-                  required
-                  style={{ flex: 1 }}
-                >
-                  <option value="">Select a location</option>
-                  {locations.map(location => (
-                    <option key={location.id} value={location.id}>
-                      {location.name}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  onClick={handleAddLocationClick}
-                  className="add-location-btn" // Можно стилизовать отдельно
-                >
-                  +
-                </button>
-              </div>
+              <label>Местоположение позиции:</label>
+              <select
+                value={locationId}
+                onChange={(e) => setLocationId(e.target.value)}
+                required
+              >
+                <option value="">Выбрать склад</option>
+                {locations.map(location => (
+                  <option key={location.id} value={location.id}>
+                    {location.name}
+                  </option>
+                ))}
+              </select>
             </div>
           </form>
         </div>
 
         <div className="modal-actions">
-          <button type="button" onClick={onClose} className="cancel">Cancel</button>
-          <button type="button" onClick={handleSubmit}>Add Item</button>
+          <button type="button" onClick={onClose} className="cancel">Закрыть</button>
+          <button type="button" onClick={handleSubmit}>
+            {loading ? 'Adding...' : 'Добавить'}
+          </button>
         </div>
       </div>
-
-      {/* Всплывающее модальное окно для добавления локации */}
-      {showAddLocationModal && (
-        <AddLocationModal
-          onClose={() => setShowAddLocationModal(false)}
-          token={token}
-          onLocationAdded={handleLocationAdded} // Передаём функцию для обновления списка
-        />
-      )}
     </div>
   );
 }

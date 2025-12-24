@@ -62,7 +62,7 @@ function Dashboard() {
       <main className="dashboard-main-content dashboard-main-content-flex">
         {/* Информация о пользователе */}
         <div className="dashboard-user-info-bar">
-          {userInfo && <span className="user-info-text">Hello, {userInfo.username}!</span>}
+          {userInfo && <span className="user-info-text">Welcome, {userInfo.username}!</span>}
         </div>
 
         <h2 className="dashboard-section-title">Основное меню</h2>

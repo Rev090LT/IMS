@@ -38,7 +38,7 @@ function MovementHistoryModal({ onClose, token }) {
     <div className="modal-overlay">
       <div className="modal-content">
         <div className="modal-header">
-          <h3 className="modal-title">Movement History</h3>
+          <h3 className="modal-title">Журнал перемещений</h3>
           <button onClick={onClose} className="modal-close-btn">&times;</button>
         </div>
 
@@ -46,20 +46,20 @@ function MovementHistoryModal({ onClose, token }) {
           {error && <div className="modal-message error">{error}</div>}
 
           {loading ? (
-            <p>Loading movement history...</p>
+            <p>Загрузка журнала перемещения...</p>
           ) : (
             <div className="inventory-table-container"> {/* Используем существующий стиль */}
               <table className="inventory-table"> {/* Используем существующий стиль */}
                 <thead>
                   <tr>
-                    <th>Item QR</th>
-                    <th>Item Name</th>
-                    <th>From Location</th>
-                    <th>To Location</th>
-                    <th>Quantity</th>
-                    <th>Action Type</th>
-                    <th>Employee</th>
-                    <th>Date</th>
+                    <th>QR позиции</th>
+                    <th>Имя позиции</th>
+                    <th>Перемещено откуда</th>
+                    <th>Перемещено куда</th>
+                    <th>Количество</th>
+                    <th>Тип перемещения</th>
+                    <th>Кем перемещено</th>
+                    <th>Дата</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -78,7 +78,7 @@ function MovementHistoryModal({ onClose, token }) {
                     ))
                   ) : (
                     <tr>
-                      <td colSpan="8" style={{ textAlign: 'center' }}>No movement records found</td>
+                      <td colSpan="8" style={{ textAlign: 'center' }}>Не найдено записей перемещения</td>
                     </tr>
                   )}
                 </tbody>
@@ -88,7 +88,7 @@ function MovementHistoryModal({ onClose, token }) {
         </div>
 
         <div className="modal-actions">
-          <button onClick={onClose} className="cancel">Close</button>
+          <button onClick={onClose} className="cancel">Закрыть</button>
         </div>
       </div>
     </div>

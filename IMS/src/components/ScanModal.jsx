@@ -9,7 +9,7 @@ function ScanModal({ onClose, token }) {
 
   const handleScan = async () => {
     if (!qrCode.trim()) {
-      setError('QR code is required');
+      setError('Необходим QR код');
       return;
     }
 
@@ -24,7 +24,7 @@ function ScanModal({ onClose, token }) {
 
       // Временная заглушка
     } catch (err) {
-      setError('Failed to fetch item info');
+      setError('Ошибка получения информации о позиции');
       console.error(err);
     } finally {
       setLoading(false);
@@ -37,7 +37,7 @@ function ScanModal({ onClose, token }) {
 
     try {
       if (!navigator.bluetooth) {
-        setError('Bluetooth is not supported on this browser');
+        setError('Bluetooth не поддерживается этим браузером');
         return;
       }
 
@@ -54,7 +54,7 @@ function ScanModal({ onClose, token }) {
       }, 500);
 
     } catch (err) {
-      setError('Failed to connect to Bluetooth scanner');
+      setError('Не удалось подключиться к сканеру Bluetooth');
       console.error(err);
     }
   };
@@ -63,7 +63,7 @@ function ScanModal({ onClose, token }) {
     <div className="modal-overlay">
       <div className="modal-content">
         <div className="modal-header">
-          <h3 className="modal-title">Scan Item</h3>
+          <h3 className="modal-title">Сканировать позицию</h3>
           <button onClick={onClose} className="modal-close-btn">&times;</button>
         </div>
 
@@ -75,7 +75,7 @@ function ScanModal({ onClose, token }) {
               type="text"
               value={qrCode}
               onChange={(e) => setQrCode(e.target.value)}
-              placeholder="Enter or scan QR code"
+              placeholder="Введите инвентарный номер или отсканируйте QR код"
               className="modal-form-input"
             />
             <button
@@ -83,31 +83,31 @@ function ScanModal({ onClose, token }) {
               disabled={loading}
               className="scan"
             >
-              {loading ? 'Scanning...' : 'Scan via Input'}
+              {loading ? 'Scanning...' : 'Сканировать вручную'}
             </button>
 
             <button
               onClick={handleBluetoothScan}
               className="bluetooth"
             >
-              Scan via Bluetooth
+              Сканировать с подключением Bluetooth сканера
             </button>
           </div>
 
           {itemInfo && (
             <div className="item-info">
-              <h4>Item Found:</h4>
+              <h4>Позиция найдена:</h4>
               <p><strong>QR:</strong> {itemInfo.qr_code}</p>
-              <p><strong>Name:</strong> {itemInfo.name}</p>
-              <p><strong>Quantity:</strong> {itemInfo.quantity}</p>
-              <p><strong>Status:</strong> {itemInfo.status}</p>
-              <p><strong>Location:</strong> {itemInfo.location}</p>
+              <p><strong>Имя:</strong> {itemInfo.name}</p>
+              <p><strong>Количество:</strong> {itemInfo.quantity}</p>
+              <p><strong>Статус:</strong> {itemInfo.status}</p>
+              <p><strong>Местоположение:</strong> {itemInfo.location}</p>
             </div>
           )}
         </div>
 
         <div className="modal-actions">
-          <button onClick={onClose} className="cancel">Close</button>
+          <button onClick={onClose} className="cancel">Закрыть</button>
         </div>
       </div>
     </div>

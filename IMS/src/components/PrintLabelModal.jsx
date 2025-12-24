@@ -15,11 +15,11 @@ function PrintLabelModal({ onClose, token }) {
     setSuccess('');
 
     if (!itemName.trim() || !inventoryNumber.trim()) {
-      setError('Both Name and Inventory Number are required');
+      setError('Необходимо имя и инвентарный номер');
       return;
     }
 
-    setSuccess('Label generated successfully.');
+    setSuccess('Этикетка сгенерирована успешно');
   };
 
   // useReactToPrint
@@ -61,7 +61,7 @@ function PrintLabelModal({ onClose, token }) {
     <div className="modal-overlay">
       <div className="modal-content">
         <div className="modal-header">
-          <h3 className="modal-title">Print Label</h3>
+          <h3 className="modal-title">Печать этикеток</h3>
           <button onClick={onClose} className="modal-close-btn">&times;</button>
         </div>
 
@@ -71,7 +71,7 @@ function PrintLabelModal({ onClose, token }) {
 
           <form onSubmit={handleGenerate} className="modal-form">
             <div>
-              <label>Item Name:</label>
+              <label>Имя позиции:</label>
               <input
                 type="text"
                 value={itemName}
@@ -81,7 +81,7 @@ function PrintLabelModal({ onClose, token }) {
             </div>
 
             <div>
-              <label>Inventory Number (for QR):</label>
+              <label>Инвентарный номер:</label>
               <input
                 type="text"
                 value={inventoryNumber}
@@ -89,8 +89,9 @@ function PrintLabelModal({ onClose, token }) {
                 required
               />
             </div>
-
-            <button type="submit">Generate Label</button>
+            <div className='modal-actions'>
+            <button type="submit">Сгенерировать метку</button>
+            </div>
           </form>
 
           {/* УСЛОВНЫЙ РЕНДЕР КОНТЕЙНЕРА ПЕЧАТИ */}
@@ -102,17 +103,17 @@ function PrintLabelModal({ onClose, token }) {
                 <div style={{ marginBottom: '2mm' }}>
                   <QRCodeSVG
                     value={inventoryNumber}
-                    size={64}
+                    size={150}
                     level="H"
                     includeMargin={true}
                   />
                 </div>
                 {/* Имя товара */}
-                <div style={{ fontWeight: 'bold', marginBottom: '1mm' }}>
+                <div style={{ fontWeight: 'bold', marginBottom: '5mm' }}>
                   {itemName}
                 </div>
                 {/* Инвентарный номер */}
-                <div style={{ fontSize: '8pt' }}>
+                <div style={{ fontSize: '11pt' }}>
                   INV: {inventoryNumber}
                 </div>
               </div>
@@ -162,13 +163,13 @@ function PrintLabelModal({ onClose, token }) {
           {/* Кнопка печати - показываем только если этикетка сгенерирована */}
           {success && (
             <button onClick={handlePrint} className="action-btn" style={{ backgroundColor: '#3498db', color: 'white' }}>
-              Print Label
+              Печать
             </button>
           )}
         </div>
 
         <div className="modal-actions">
-          <button type="button" onClick={onClose} className="cancel">Close</button>
+          <button type="button" onClick={onClose} className="cancel">Закрыть</button>
         </div>
       </div>
     </div>
