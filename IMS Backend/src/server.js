@@ -2,6 +2,7 @@ import app from './app.js';  // <= Должно быть из app.js
 import dotenv from 'dotenv';
 import pool from './config/db.js'; // Подключаем pool напрямую
 
+
 dotenv.config();
 
 const PORT = process.env.PORT || 3000;

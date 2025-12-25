@@ -1,3 +1,5 @@
+// IMS/src/App.jsx
+
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
@@ -5,6 +7,7 @@ import ScanPage from './components/ScanPage'; // Создадим
 import MovePage from './components/MovePage'; // Создадим
 import DisposePage from './components/DisposePage'; // Создадим
 import InventoryPage from './components/InventoryPage'; // Создадим
+
 
 const PrivateRoute = ({ children }) => {
   const token = localStorage.getItem('token');

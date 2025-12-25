@@ -21,4 +21,5 @@ app.use('/api/auth', authRoutes);
 app.use('/api/items', itemsRoutes); // Убедитесь, что этот маршрут подключён
 app.use('/api/locations', locationsRoutes); // И этот тоже
 app.use('/api/movements', movementsRoutes);
+
 export default app;
