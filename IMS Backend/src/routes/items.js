@@ -21,123 +21,106 @@ router.get('/:qr_code', authenticateToken, async (req, res) => {
 
 // Списание товара
 router.post('/dispose', authenticateToken, async (req, res) => {
-  const { qr_code, quantity } = req.body;
+  const { qr_code, quantity } = req.body; // <= Принимаем qr_code
 
-  if (!qr_code || !quantity || quantity <= 0) {
-    return res.status(400).json({ error: 'qr_code and quantity > 0 required' });
+  if (!qr_code || quantity <= 0) {
+    return res.status(400).json({ error: 'QR код и количество обязательны' });
   }
 
   try {
-    const updatedItem = await Item.dispose(qr_code, quantity);
-    res.json({ message: 'Item disposed successfully', item: updatedItem });
-  } catch (err) {
-    res.status(400).json({ error: err.message });
-  }
-});
-
-// Перемещение товара (новый маршрут)
-router.post('/move', authenticateToken, async (req, res) => {
-  const { qr_code, from_location_id, to_location_id, quantity } = req.body;
-
-  if (!qr_code || from_location_id === undefined || to_location_id === undefined || !quantity || quantity <= 0) {
-    return res.status(400).json({ error: 'qr_code, from_location_id, to_location_id, and quantity > 0 are required' });
-  }
-
-  try {
-    // Начинаем транзакцию
-    await pool.query('BEGIN');
-
-    // Проверим, существует ли товар
-    const item = await Item.getByQR(qr_code); // <-- getByQR использует JOIN
-    if (!item) {
-      await pool.query('ROLLBACK');
+    // Найдём товар по qr_code
+    const itemResult = await pool.query('SELECT * FROM items WHERE qr_code = $1', [qr_code]);
+    if (itemResult.rows.length === 0) {
       return res.status(404).json({ error: 'Item not found' });
     }
 
-    // Проверим, что товар действительно находится на from_location_id
-    if (item.location_id != from_location_id) { // <-- Сравниваем с location_id
-      await pool.query('ROLLBACK');
-      return res.status(400).json({ error: 'Item is not at the specified "from" location' });
-    }
+    const item = itemResult.rows[0];
 
-    // Проверим, достаточно ли товара на from_location
     if (item.quantity < quantity) {
-      await pool.query('ROLLBACK');
-      return res.status(400).json({ error: 'Not enough quantity to move' });
+      return res.status(400).json({ error: 'Невозможно списать позицию, которой нет в наличии' });
     }
 
-    // Обновим количество (уменьшаем на from_location)
-    await Item.updateQuantity(qr_code, -quantity);
+    // Обновим количество
+    const newQuantity = item.quantity - quantity;
+    await pool.query('UPDATE items SET quantity = $1 WHERE qr_code = $2', [newQuantity, qr_code]);
 
-    // Обновим локацию (теперь товар на to_location)
-    await Item.updateLocation(qr_code, to_location_id); // <-- updateLocation использует location_id
-
-    // Запишем историю перемещения
+    // Запишем в историю
     await pool.query(`
-      INSERT INTO movements (item_id, from_location_id, to_location_id, employee_id, action_type, quantity, date)
-      VALUES ($1, $2, $3, $4, $5, $6, NOW())
-    `, [item.id, from_location_id, to_location_id, req.user.id, 'move', quantity]);
+      INSERT INTO movements (item_id, from_location_id, to_location_id, employee_id, action_type, quantity, comment)
+      VALUES ($1, $2, NULL, $3, 'dispose', $4, 'Disposed via modal')
+    `, [item.id, item.location_id, req.user.id, quantity]);
 
-    // Зафиксируем транзакцию
-    await pool.query('COMMIT');
+    // Проверим, стало ли количество 0
+    if (newQuantity === 0) {
+      // Установим статус 'disposed'
+      await pool.query('UPDATE items SET status = $1 WHERE qr_code = $2', ['disposed', qr_code]);
+    } else if (item.status === 'disposed' && newQuantity > 0) {
+      // Если был 'disposed', но количество > 0, вернём статус 'warehouse'
+      await pool.query('UPDATE items SET status = $1 WHERE qr_code = $2', ['warehouse', qr_code]);
+    }
 
-    res.json({ message: 'Item moved successfully', item: { ...item, quantity: item.quantity - quantity, location_id: to_location_id } });
+    res.status(200).json({ message: 'Позиция успешно списана', newQuantity });
   } catch (err) {
-    await pool.query('ROLLBACK');
-    console.error('Error moving item:', err);
+    console.error('Error disposing item:', err);
     res.status(500).json({ error: err.message });
   }
 });
 
+// Перемещение товара (новый маршрут)
+
 // IMS Backend/src/routes/items.js
 router.post('/move', authenticateToken, async (req, res) => {
-  const { qr_code, from_location_id, to_location_id, quantity } = req.body;
+  const { item_id, from_location_id, to_location_id, quantity, comment } = req.body;
 
-  if (!qr_code || from_location_id === undefined || to_location_id === undefined || !quantity || quantity <= 0) {
-    return res.status(400).json({ error: 'qr_code, from_location_id, to_location_id, and quantity > 0 are required' });
+  if (!item_id || !from_location_id || !to_location_id || quantity <= 0) {
+    return res.status(400).json({ error: 'All fields are required' });
   }
 
   try {
-    // Начинаем транзакцию
-    await pool.query('BEGIN');
-
-    // Проверим, существует ли товар
-    const item = await Item.getByQR(qr_code);
-    if (!item) {
-      await pool.query('ROLLBACK');
-      return res.status(404).json({ error: 'Item not found' });
+    // Найдём товар
+    const itemResult = await pool.query('SELECT * FROM items WHERE id = $1 AND location_id = $2', [item_id, from_location_id]);
+    if (itemResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Item not found in the specified location' });
     }
 
-    // Проверим, что товар действительно находится на from_location_id
-    if (item.location_id != from_location_id) { // != для сравнения с NULL
-      await pool.query('ROLLBACK');
-      return res.status(400).json({ error: 'Item is not at the specified "from" location' });
-    }
+    const item = itemResult.rows[0];
 
-    // Проверим, достаточно ли товара на from_location
     if (item.quantity < quantity) {
-      await pool.query('ROLLBACK');
       return res.status(400).json({ error: 'Not enough quantity to move' });
     }
 
-    // Обновим количество (уменьшаем на from_location)
-    await Item.updateQuantity(qr_code, -quantity);
+    // Обновим количество в старой локации
+    const newQuantity = item.quantity - quantity;
+    await pool.query('UPDATE items SET quantity = $1 WHERE id = $2', [newQuantity, item_id]);
 
-    // Обновим локацию (теперь товар на to_location)
-    await Item.updateLocation(qr_code, to_location_id);
+    // Если товара не осталось на старой локации, проверим статус
+    if (newQuantity === 0) {
+      await pool.query('UPDATE items SET status = $1 WHERE id = $2', ['disposed', item_id]);
+    } else if (item.status === 'disposed' && newQuantity > 0) {
+      await pool.query('UPDATE items SET status = $1 WHERE id = $2', ['warehouse', item_id]);
+    }
 
-    // Запишем историю перемещения
+    // Проверим, существует ли уже товар в новой локации
+    const existingItemResult = await pool.query('SELECT id FROM items WHERE qr_code = $1 AND location_id = $2', [item.qr_code, to_location_id]);
+    if (existingItemResult.rows.length > 0) {
+      // Объединим с существующим товаром
+      await pool.query('UPDATE items SET quantity = quantity + $1 WHERE id = $2', [quantity, existingItemResult.rows[0].id]);
+    } else {
+      // Создадим новый товар в новой локации
+      await pool.query(`
+        INSERT INTO items (qr_code, name, description, quantity, status, location_id, created_by_user_id)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `, [item.qr_code, item.name, item.description, quantity, 'warehouse', to_location_id, item.created_by_user_id]);
+    }
+
+    // Запишем в историю
     await pool.query(`
-      INSERT INTO movements (item_id, from_location_id, to_location_id, employee_id, action_type, quantity, date)
-      VALUES ($1, $2, $3, $4, $5, $6, NOW())
-    `, [item.id, from_location_id, to_location_id, req.user.id, 'move', quantity]);
+      INSERT INTO movements (item_id, from_location_id, to_location_id, employee_id, action_type, quantity, comment)
+      VALUES ($1, $2, $3, $4, 'move', $5, $6)
+    `, [item_id, from_location_id, to_location_id, req.user.id, quantity, comment || null]);
 
-    // Зафиксируем транзакцию
-    await pool.query('COMMIT');
-
-    res.json({ message: 'Item moved successfully', item: { ...item, quantity: item.quantity - quantity, location_id: to_location_id } });
+    res.status(200).json({ message: 'Item moved successfully' });
   } catch (err) {
-    await pool.query('ROLLBACK');
     console.error('Error moving item:', err);
     res.status(500).json({ error: err.message });
   }
@@ -184,16 +167,38 @@ router.get('/', authenticateToken, async (req, res) => {
 });
 
 router.post('/', authenticateToken, async (req, res) => {
-  const { qr_code, name, description, quantity, location_id } = req.body; // <-- location_id
+  const { qr_code, name, description, quantity, location_id } = req.body;
 
-  if (!qr_code || !name || !quantity || quantity <= 0 || !location_id) { // <-- location_id обязательна
+  if (!qr_code || !name || !quantity || quantity <= 0 || !location_id) {
     return res.status(400).json({ error: 'qr_code, name, quantity, and location_id are required' });
   }
 
   try {
-    // Передаём location_id в Item.create
-    const newItem = await Item.create({ qr_code, name, description, quantity, location_id }, req.user.username);
-    res.status(201).json(newItem);
+    // Проверим, нет ли уже товара с таким qr_code
+    const existingItemResult = await pool.query('SELECT id, quantity, status FROM items WHERE qr_code = $1', [qr_code]);
+    if (existingItemResult.rows.length > 0) {
+      // Объединим с существующим товаром
+      const existingItem = existingItemResult.rows[0];
+      const newQuantity = existingItem.quantity + quantity;
+
+      await pool.query('UPDATE items SET quantity = $1 WHERE id = $2', [newQuantity, existingItem.id]);
+
+      // Если статус был 'disposed', но количество > 0, вернём статус 'warehouse'
+      if (existingItem.status === 'disposed') {
+        await pool.query('UPDATE items SET status = $1 WHERE id = $2', ['warehouse', existingItem.id]);
+      }
+
+      res.status(200).json({ message: 'Item quantity updated', item_id: existingItem.id });
+      return;
+    }
+
+    // Создаём новый товар
+    const result = await pool.query(
+      `INSERT INTO items (qr_code, name, description, quantity, status, location_id, created_by_user_id, created_by_username)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+      [qr_code, name, description, quantity, 'warehouse', location_id, req.user.id, req.user.username]
+    );
+    res.status(201).json(result.rows[0]);
   } catch (err) {
     if (err.message.includes('duplicate key value violates unique constraint')) {
       res.status(400).json({ error: 'Item with this QR code already exists' });

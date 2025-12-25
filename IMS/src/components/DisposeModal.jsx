@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { disposeItem } from '../services/api'; // Заглушка
+import { disposeItem } from '../services/api';
 
 function DisposeModal({ onClose, token }) {
-  const [qrCode, setQrCode] = useState('');
+  const [qrCode, setQrCode] = useState(''); // <= Вернули qr_code
   const [quantity, setQuantity] = useState(1);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -13,28 +13,24 @@ function DisposeModal({ onClose, token }) {
     setSuccess('');
 
     if (!qrCode || quantity <= 0) {
-      setError('QR code and quantity are required');
+      setError('QR код и количество обязательны');
       return;
     }
 
     try {
-      const response = await disposeItem({ qr_code: qrCode, quantity }, token);
+      const response = await disposeItem({ qr_code: qrCode, quantity }, token); // <= Отправляем qr_code
       const data = await response.json();
+
       if (response.ok) {
-        setSuccess('Item disposed successfully');
-        setQrCode('');
+        setSuccess('Позиция успешно списана');
+        setQrCode(''); // <= Очищаем qr_code
         setQuantity(1);
       } else {
-        setError(data.error || 'Failed to dispose item');
+        setError(data.error || 'Не удалось списать позицию');
       }
-
-      // Временная заглушка
-      setSuccess('Item disposed successfully (mock)');
-      setQrCode('');
-      setQuantity(1);
     } catch (err) {
-      setError('Network error or server is unreachable');
-      console.error(err);
+      setError('Ошибка сети или сервер недоступен');
+      console.error('Error during dispose item:', err);
     }
   };
 
@@ -52,12 +48,13 @@ function DisposeModal({ onClose, token }) {
 
           <form onSubmit={handleSubmit} className="modal-form">
             <div>
-              <label>QR код:</label>
+              <label>QR код:</label> {/* <= Вернули подпись */}
               <input
                 type="text"
                 value={qrCode}
                 onChange={(e) => setQrCode(e.target.value)}
                 required
+                placeholder="Введите QR код"
               />
             </div>
 

@@ -101,7 +101,7 @@ function ScanModal({ onClose, token }) {
               <p><strong>Имя:</strong> {itemInfo.name}</p>
               <p><strong>Количество:</strong> {itemInfo.quantity}</p>
               <p><strong>Статус:</strong> {itemInfo.status}</p>
-              <p><strong>Местоположение:</strong> {itemInfo.location}</p>
+              <p><strong>Местоположение:</strong> {itemInfo.location_name}</p>
             </div>
           )}
         </div>

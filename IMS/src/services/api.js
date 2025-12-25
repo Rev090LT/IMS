@@ -44,7 +44,7 @@ export const disposeItem = (data, token) => {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${token}`,
     },
-    body: JSON.stringify(data),
+    body: JSON.stringify(data), // data = { qr_code: "...", quantity: 1 }
   });
 };
 
