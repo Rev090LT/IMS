@@ -1,5 +1,5 @@
-import app from './app.js';  // <= Должно быть из app.js
 import dotenv from 'dotenv';
+import app from './app.js';  // <= Должно быть из app.js
 import pool from './config/db.js'; // Подключаем pool напрямую
 
 

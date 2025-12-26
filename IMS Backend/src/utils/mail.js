@@ -1,20 +1,21 @@
-// IMS Backend/src/utils/mail.js
-const nodemailer = require('nodemailer');
+import nodemailer from 'nodemailer';
+import fs from 'fs';
+import path from 'path';
 
-const transporter = nodemailer.createTransporter({
-  host: process.env.SMTP_HOST,
-  port: parseInt(process.env.SMTP_PORT),
-  secure: process.env.SMTP_SECURE === 'true', // true для 465, false для 587
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST || 'smtp.yandex.ru',
+  port: parseInt(process.env.SMTP_PORT) || 587,
+  secure: process.env.SMTP_SECURE === 'true',
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
   },
 });
 
-const sendConfirmationCode = async (toEmail, code) => {
+export const sendConfirmationCode = async (toEmail, code) => {  // <= Вот это важно
   const mailOptions = {
     from: process.env.SMTP_USER,
-    to: toEmail, // ваш email (администратора)
+    to: toEmail,
     subject: 'Код подтверждения для регистрации нового пользователя',
     text: `Код подтверждения: ${code}. Пожалуйста, продиктуйте его сотруднику.`,
   };
@@ -27,5 +28,3 @@ const sendConfirmationCode = async (toEmail, code) => {
     throw err;
   }
 };
-
-module.exports = { sendConfirmationCode };
