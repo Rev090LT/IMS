@@ -16,13 +16,18 @@ function Login() {
   const [regUsername, setRegUsername] = useState('');
   const [regPassword, setRegPassword] = useState('');
   const [regCode, setRegCode] = useState('');
+  const [regPhone, setRegPhone] = useState(''); 
   const [regSuccess, setRegSuccess] = useState(false);
 
   const handleLogin = async (e) => {
     e.preventDefault();
     try {
       setError('');
-      const response = await apiLogin({ username, password });
+      const response = await fetch(`${API_BASE}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
       const data = await response.json();
 
       if (response.ok && data.token) {
@@ -43,7 +48,7 @@ function Login() {
       const response = await fetch(`${API_BASE}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: regUsername, password: regPassword }),
+        body: JSON.stringify({ username: regUsername, password: regPassword, phone: regPhone }), // <= Добавили phone
       });
       const data = await response.json();
       if (response.ok) {
@@ -60,7 +65,7 @@ function Login() {
   const handleConfirmRegistration = async (e) => {
     e.preventDefault();
     try {
-      const response = await fetch(`${API_BASE}/auth/confirm-registration`, {
+      const response = await fetch(`${API_BASE}/auth/confirm-registration`, { // <= Предполагаем, что маршрут будет добавлен позже
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: regUsername, confirmation_code: regCode }),
@@ -78,8 +83,8 @@ function Login() {
   };
 
   return (
-    <div className="login-container"> {/* <= Вот этот класс */}
-      <div className="login-box">     {/* <= И этот */}
+    <div className="login-container">
+      <div className="login-box">
         {mode === 'login' && (
           <>
             <h2 className="login-title">Вход в IMS</h2>
@@ -104,7 +109,12 @@ function Login() {
                 />
               </div>
               <button type="submit">Войти</button>
-              <button type="button" onClick={() => setMode('register')}>Регистрация</button>
+              <div>
+                {/* <= Гиперссылка под полем пароля */}
+                <a href="#!" onClick={() => setMode('register')} style={{ display: 'block', marginTop: '10px' }}>
+                  Регистрация
+                </a>
+              </div>
             </form>
           </>
         )}
@@ -134,8 +144,22 @@ function Login() {
                       required
                     />
                   </div>
+                  <div>
+                    <label>Телефон:</label>
+                    <input
+                      type="tel"
+                      value={regPhone}
+                      onChange={(e) => setRegPhone(e.target.value)}
+                      required
+                      placeholder="+7 (XXX) XXX-XX-XX"
+                    />
+                  </div>
                   <button type="submit">Запросить регистрацию</button>
-                  <button type="button" onClick={() => setMode('login')}>Назад</button>
+                  <div>
+                    <a href="#!" onClick={() => setMode('login')} style={{ display: 'block', marginTop: '10px' }}>
+                      Назад
+                    </a>
+                  </div>
                 </form>
               </>
             ) : (
@@ -153,7 +177,11 @@ function Login() {
                     />
                   </div>
                   <button type="submit">Подтвердить регистрацию</button>
-                  <button type="button" onClick={() => setMode('login')}>Назад</button>
+                  <div>
+                    <a href="#!" onClick={() => setMode('login')} style={{ display: 'block', marginTop: '10px' }}>
+                      Назад
+                    </a>
+                  </div>
                 </form>
               </>
             )}

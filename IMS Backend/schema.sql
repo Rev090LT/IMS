@@ -73,3 +73,14 @@ CREATE TABLE pending_registrations (
     used BOOLEAN DEFAULT FALSE -- Флаг, использован ли код
 );
 
+CREATE TABLE pending_users (
+    id SERIAL PRIMARY KEY,
+    username VARCHAR(50) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    phone VARCHAR(20), -- Новое поле
+    confirmation_code VARCHAR(6), -- Новое поле
+    created_at TIMESTAMP DEFAULT NOW(),
+    approved BOOLEAN DEFAULT FALSE -- Оставим на будущее, если решим одобрять вручную
+);
+
+TRUNCATE TABLE имя_таблицы; --удалить все из таблицы

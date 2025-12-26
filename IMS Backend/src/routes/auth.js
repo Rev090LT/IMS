@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { User } from '../models/User.js';
 import pool from '../config/db.js';
-import { sendConfirmationCode } from '../utils/mail.js';
+import { sendSms } from '../utils/sms.js';
 
 const router = express.Router();
 
@@ -22,46 +22,34 @@ router.post('/login', async (req, res) => {
 
 // Регистрация (шаг 1: запрос регистрации)
 router.post('/register', async (req, res) => {
-  const { username, password } = req.body;
+  const { username, password, phone } = req.body;
 
-  if (!username || !password || username.length < 3 || password.length < 6) {
-    return res.status(400).json({ error: 'Username must be at least 3 chars and password at least 6 chars' });
+  if (!username || !password || !phone || username.length < 3 || password.length < 6) {
+    return res.status(400).json({ error: 'Username, password, and phone are required' });
   }
 
   try {
-    // Проверим, не существует ли уже пользователь
-    const existingUser = await pool.query('SELECT id FROM users WHERE username = $1', [username]);
-    if (existingUser.rows.length > 0) {
-      return res.status(400).json({ error: 'Username already exists' });
-    }
-
-    // Проверим, не существует ли уже запрос регистрации
-    const existingPending = await pool.query('SELECT id FROM pending_registrations WHERE username = $1', [username]);
-    if (existingPending.rows.length > 0) {
-      return res.status(400).json({ error: 'Registration request already exists. Please wait for admin approval.' });
-    }
-
-    // Хешируем пароль
-    const hashedPassword = await bcrypt.hash(password, 10);
+    // ... (проверки)
 
     // Генерируем 6-значный код
     const confirmationCode = Math.floor(100000 + Math.random() * 900000).toString();
 
-    // Устанавливаем время истечения (1 час)
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 час
+    // Хешируем пароль
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Сохраняем запрос в pending_registrations
+    // Сохраняем запрос в pending_users с кодом
     await pool.query(
-      'INSERT INTO pending_registrations (username, password_hash, confirmation_code, expires_at) VALUES ($1, $2, $3, $4)',
-      [username, hashedPassword, confirmationCode, expiresAt]
+      'INSERT INTO pending_users (username, password_hash, phone, confirmation_code) VALUES ($1, $2, $3, $4)',
+      [username, hashedPassword, phone, confirmationCode]
     );
 
-    // Отправляем код администратору
-    await sendConfirmationCode(process.env.ADMIN_EMAIL, confirmationCode);
+    // <<<--- Вот тут должна быть строка: --->>>
+    console.log('Sending SMS to:', phone, 'with code:', confirmationCode); // <= Временный лог
+    await sendSms(phone, `Your confirmation code: ${confirmationCode}`); // <= Вот тут
 
-    res.status(200).json({ message: 'Registration request received. Please wait for admin to provide confirmation code.' });
+    res.status(200).json({ message: 'Registration request received. Please check your SMS for confirmation code.' });
   } catch (err) {
-    console.error('Error during registration request:', err);
+    console.error('Error during registration request:', err); // <= Вот тут будет ошибка, если sendSms упадёт
     res.status(500).json({ error: err.message });
   }
 });
@@ -77,12 +65,12 @@ router.post('/confirm-registration', async (req, res) => {
   try {
     // Находим запрос регистрации
     const pending = await pool.query(
-      'SELECT * FROM pending_registrations WHERE username = $1 AND confirmation_code = $2 AND expires_at > NOW() AND used = FALSE',
+      'SELECT * FROM pending_users WHERE username = $1 AND confirmation_code = $2 AND approved = FALSE',
       [username, confirmation_code]
     );
 
     if (pending.rows.length === 0) {
-      return res.status(400).json({ error: 'Invalid or expired confirmation code' });
+      return res.status(400).json({ error: 'Invalid confirmation code' });
     }
 
     const user = pending.rows[0];
@@ -90,11 +78,11 @@ router.post('/confirm-registration', async (req, res) => {
     // Создаём пользователя в основной таблице
     const result = await pool.query(
       'INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3) RETURNING id, username, role',
-      [user.username, user.password_hash, 'user'] // по умолчанию роль 'user'
+      [user.username, user.password_hash, 'user']
     );
 
-    // Отмечаем запрос как использованный
-    await pool.query('UPDATE pending_registrations SET used = TRUE WHERE id = $1', [user.id]);
+    // Удаляем из pending_users
+    await pool.query('DELETE FROM pending_users WHERE id = $1', [user.id]);
 
     res.status(201).json({ message: 'User registered successfully', user: result.rows[0] });
   } catch (err) {
@@ -102,4 +90,5 @@ router.post('/confirm-registration', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
 export default router;
