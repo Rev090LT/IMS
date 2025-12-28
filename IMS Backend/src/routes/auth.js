@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import { User } from '../models/User.js';
 import pool from '../config/db.js';
 import { sendSms } from '../utils/sms.js';
+import { sendConfirmationCode } from '../utils/mail.js'; // <= Импортируем функцию
 
 const router = express.Router();
 
@@ -19,13 +20,13 @@ router.post('/login', async (req, res) => {
     res.status(401).json({ error: 'Неверное имя пользователя или пароль' });
   }
 });
-
+/*
 // Регистрация (шаг 1: запрос регистрации)
 router.post('/register', async (req, res) => {
-  const { username, password, phone } = req.body;
+  const { username, password } = req.body;
 
-  if (!username || !password || !phone || username.length < 3 || password.length < 6) {
-    return res.status(400).json({ error: 'Username, password, and phone are required' });
+  if (!username || !password || username.length < 3 || password.length < 6) {
+    return res.status(400).json({ error: 'Username must be at least 3 chars and password at least 6 chars' });
   }
 
   try {
@@ -37,19 +38,24 @@ router.post('/register', async (req, res) => {
     // Хешируем пароль
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Сохраняем запрос в pending_users с кодом
+    // Устанавливаем время истечения (1 час)
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 час
+
+    // Сохраняем запрос в pending_registrations
     await pool.query(
-      'INSERT INTO pending_users (username, password_hash, phone, confirmation_code) VALUES ($1, $2, $3, $4)',
-      [username, hashedPassword, phone, confirmationCode]
+      'INSERT INTO pending_registrations (username, password_hash, confirmation_code, expires_at) VALUES ($1, $2, $3, $4)',
+      [username, hashedPassword, confirmationCode, expiresAt]
     );
 
-    // <<<--- Вот тут должна быть строка: --->>>
-    console.log('Sending SMS to:', phone, 'with code:', confirmationCode); // <= Временный лог
-    await sendSms(phone, `Your confirmation code: ${confirmationCode}`); // <= Вот тут
+    // <<<--- УДАЛИТЬ или ЗАКОММЕНТИРОВАТЬ --->>>
+    await sendConfirmationCode(process.env.ADMIN_EMAIL, confirmationCode);
 
-    res.status(200).json({ message: 'Registration request received. Please check your SMS for confirmation code.' });
+    // Вместо отправки письма — логируем код в консоль
+    console.log('Confirmation code:', confirmationCode);
+
+    res.status(200).json({ message: 'Registration request received. Code logged to console.' });
   } catch (err) {
-    console.error('Error during registration request:', err); // <= Вот тут будет ошибка, если sendSms упадёт
+    console.error('Error during registration request:', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -90,5 +96,5 @@ router.post('/confirm-registration', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
+*/
 export default router;

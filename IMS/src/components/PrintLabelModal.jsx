@@ -7,6 +7,7 @@ function PrintLabelModal({ onClose, token }) {
   const [inventoryNumber, setInventoryNumber] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [template, setTemplate] = useState('75x120'); // Новое состояние для шаблона
   const componentRef = useRef(); // <= ref
 
   const handleGenerate = (e) => {
@@ -40,12 +41,11 @@ function PrintLabelModal({ onClose, token }) {
         position: absolute;
         top: 10mm; /* Отступ сверху */
         left: 10mm; /* Отступ слева */
-        width: 100mm;
-        height: 50mm;
-        padding: 5mm;
+        ${template === '75x120' ? 'width: 75mm; height: 120mm;' : 'width: 58mm; height: 40mm;'}
+        padding: ${template === '75x120' ? '5mm' : '2mm'};
         font-family: 'Arial, sans-serif';
-        fontSize: '10pt';
-        lineHeight: 1.2;
+        font-size: ${template === '75x120' ? '10pt' : '8pt'};
+        line-height: 1.2;
         border: 1px solid black;
         display: flex;
         flex-direction: column;
@@ -56,6 +56,45 @@ function PrintLabelModal({ onClose, token }) {
       }
     `
   });
+
+  // Функция для получения стилей превью в зависимости от шаблона
+  const getPreviewStyle = () => {
+    if (template === '75x120') {
+      return {
+        width: '75mm',
+        height: '120mm',
+        padding: '5mm',
+        fontFamily: 'Arial, sans-serif',
+        fontSize: '10pt',
+        lineHeight: 1.2,
+        border: '1px solid #ccc',
+        display: 'inline-flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        textAlign: 'center',
+        boxSizing: 'border-box',
+        backgroundColor: 'white'
+      };
+    } else { // 58x40
+      return {
+        width: '58mm',
+        height: '40mm',
+        padding: '2mm',
+        fontFamily: 'Arial, sans-serif',
+        fontSize: '8pt',
+        lineHeight: 1.2,
+        border: '1px solid #ccc',
+        display: 'inline-flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        textAlign: 'center',
+        boxSizing: 'border-box',
+        backgroundColor: 'white'
+      };
+    }
+  };
 
   return (
     <div className="modal-overlay">
@@ -89,8 +128,22 @@ function PrintLabelModal({ onClose, token }) {
                 required
               />
             </div>
+
+            {/* Выбор шаблона */}
+            <div style={{ marginTop: '10px' }}>
+              <label>Шаблон этикетки:</label>
+              <select
+                value={template}
+                onChange={(e) => setTemplate(e.target.value)} // Обновляем состояние шаблона
+                style={{ marginLeft: '10px' }}
+              >
+                <option value="75x120">75x120 мм</option>
+                <option value="58x40">58x40 мм</option>
+              </select>
+            </div>
+
             <div className='modal-actions'>
-            <button type="submit">Сгенерировать метку</button>
+              <button type="submit">Сгенерировать метку</button>
             </div>
           </form>
 
@@ -100,20 +153,20 @@ function PrintLabelModal({ onClose, token }) {
               {/* Обертка с классом print-container */}
               <div ref={componentRef} className="print-container">
                 {/* QR код */}
-                <div style={{ marginBottom: '2mm' }}>
+                <div style={{ marginBottom: template === '75x120' ? '2mm' : '1mm' }}>
                   <QRCodeSVG
                     value={inventoryNumber}
-                    size={150}
+                    size={template === '75x120' ? 150 : 100} // Разный размер QR для разных шаблонов
                     level="H"
                     includeMargin={true}
                   />
                 </div>
                 {/* Имя товара */}
-                <div style={{ fontWeight: 'bold', marginBottom: '5mm' }}>
+                <div style={{ fontWeight: 'bold', marginBottom: template === '75x120' ? '5mm' : '2mm' }}>
                   {itemName}
                 </div>
                 {/* Инвентарный номер */}
-                <div style={{ fontSize: '11pt' }}>
+                <div style={{ fontSize: template === '75x120' ? '11pt' : '9pt' }}>
                   INV: {inventoryNumber}
                 </div>
               </div>
@@ -124,34 +177,19 @@ function PrintLabelModal({ onClose, token }) {
           {success && (
             <div className="label-preview-container" style={{ marginTop: '20px', textAlign: 'center' }}>
               <h4>Label Preview:</h4>
-              <div style={{
-                width: '100mm',
-                height: '50mm',
-                padding: '5mm',
-                fontFamily: 'Arial, sans-serif',
-                fontSize: '10pt',
-                lineHeight: 1.2,
-                border: '1px solid #ccc',
-                display: 'inline-flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                textAlign: 'center',
-                boxSizing: 'border-box',
-                backgroundColor: 'white'
-              }}>
-                <div style={{ marginBottom: '2mm' }}>
+              <div style={getPreviewStyle()}> {/* Используем функцию для стилей */}
+                <div style={{ marginBottom: template === '75x120' ? '2mm' : '1mm' }}>
                   <QRCodeSVG
                     value={inventoryNumber}
-                    size={64}
+                    size={template === '75x120' ? 64 : 48} // Разный размер QR для превью
                     level="H"
                     includeMargin={true}
                   />
                 </div>
-                <div style={{ fontWeight: 'bold', marginBottom: '1mm' }}>
+                <div style={{ fontWeight: 'bold', marginBottom: template === '75x120' ? '1mm' : '0.5mm' }}>
                   {itemName}
                 </div>
-                <div style={{ fontSize: '8pt' }}>
+                <div style={{ fontSize: template === '75x120' ? '8pt' : '6pt' }}>
                   INV: {inventoryNumber}
                 </div>
               </div>

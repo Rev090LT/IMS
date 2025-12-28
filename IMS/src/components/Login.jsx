@@ -2,22 +2,22 @@
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { login as apiLogin } from '../services/api';
 
 function Login() {
-  const API_BASE = 'http://localhost:3000/api';
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
-  // Состояния для регистрации
-  const [mode, setMode] = useState('login'); // 'login' или 'register'
+  // Состояния для регистрации (без телефона)
+  const [mode, setMode] = useState('login');
   const [regUsername, setRegUsername] = useState('');
   const [regPassword, setRegPassword] = useState('');
+  // const [regPhone, setRegPhone] = useState(''); // <= Убираем телефон
   const [regCode, setRegCode] = useState('');
-  const [regPhone, setRegPhone] = useState(''); 
   const [regSuccess, setRegSuccess] = useState(false);
+
+  const API_BASE = '/api';
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -48,7 +48,7 @@ function Login() {
       const response = await fetch(`${API_BASE}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: regUsername, password: regPassword, phone: regPhone }), // <= Добавили phone
+        body: JSON.stringify({ username: regUsername, password: regPassword }), // <= Убираем phone
       });
       const data = await response.json();
       if (response.ok) {
@@ -65,7 +65,7 @@ function Login() {
   const handleConfirmRegistration = async (e) => {
     e.preventDefault();
     try {
-      const response = await fetch(`${API_BASE}/auth/confirm-registration`, { // <= Предполагаем, что маршрут будет добавлен позже
+      const response = await fetch(`${API_BASE}/auth/confirm-registration`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: regUsername, confirmation_code: regCode }),
@@ -109,12 +109,6 @@ function Login() {
                 />
               </div>
               <button type="submit">Войти</button>
-              <div>
-                {/* <= Гиперссылка под полем пароля */}
-                <a href="#!" onClick={() => setMode('register')} style={{ display: 'block', marginTop: '10px' }}>
-                  Регистрация
-                </a>
-              </div>
             </form>
           </>
         )}
@@ -144,16 +138,7 @@ function Login() {
                       required
                     />
                   </div>
-                  <div>
-                    <label>Телефон:</label>
-                    <input
-                      type="tel"
-                      value={regPhone}
-                      onChange={(e) => setRegPhone(e.target.value)}
-                      required
-                      placeholder="+7 (XXX) XXX-XX-XX"
-                    />
-                  </div>
+                  {/* Убираем поле телефона */}
                   <button type="submit">Запросить регистрацию</button>
                   <div>
                     <a href="#!" onClick={() => setMode('login')} style={{ display: 'block', marginTop: '10px' }}>
