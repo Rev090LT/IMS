@@ -8,7 +8,7 @@ import locationsRoutes from './routes/locations.js'; // Убедитесь, чт
 import movementsRoutes from './routes/movements.js';
 import sqlRoutes from './routes/sql.js';
 import adminRoutes from './routes/admin.js'; // <= Импортируем новый маршрут
-
+import lookupRoutes from './routes/lookup.js';
 const app = express();
 
 app.use(helmet());
@@ -24,4 +24,5 @@ app.use('/api/locations', locationsRoutes); // И этот тоже
 app.use('/api/sql', sqlRoutes);
 app.use('/api/movements', movementsRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/lookup', lookupRoutes);
 export default app;

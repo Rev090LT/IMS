@@ -1,6 +1,8 @@
 import React from 'react';
 
-function Sidebar({ isOpen, onClose, onOpenSQLConsole, onOpenAddUserModal }) { // <= Добавим пропс
+function Sidebar({ isOpen, onClose, onOpenSQLConsole, onOpenAddUserModal, onOpenAboutDeveloper, onOpenAddManufacturerModal, onOpenAddCategoryModal, userRole }) { // <= Добавим пропс
+  const isAdmin = userRole === 'admin';
+
   return (
     <>
       {/* Overlay */}
@@ -36,11 +38,19 @@ function Sidebar({ isOpen, onClose, onOpenSQLConsole, onOpenAddUserModal }) { //
           boxShadow: '2px 0 5px rgba(0,0,0,0.5)',
         }}
       >
-        <div style={{ padding: '20px' }}>
+        <div style={{ padding: '20px', paddingTop: '60px' }}>
           <h3>Меню</h3>
           <ul style={{ listStyleType: 'none', padding: 0 }}>
             <li style={{ marginBottom: '20px' }}>
-              <a href="#!" style={{ color: 'white', textDecoration: 'none', fontSize: '16px' }}>
+              <a
+                href="#!"
+                onClick={(e) => {
+                  e.preventDefault();
+                  if (onOpenAboutDeveloper) onOpenAboutDeveloper();
+                  onClose();
+                }}
+                style={{ color: 'white', textDecoration: 'none', fontSize: '16px', cursor: 'pointer' }}
+              >
                 О разработчике
               </a>
             </li>
@@ -49,33 +59,63 @@ function Sidebar({ isOpen, onClose, onOpenSQLConsole, onOpenAddUserModal }) { //
                 Настройки
               </a>
             </li>
+            {/* <<<--- Вот тут добавим кнопку "Добавить класс" --->>> */}
             <li style={{ marginBottom: '20px' }}>
               <a
                 href="#!"
                 onClick={(e) => {
                   e.preventDefault();
-                  if (onOpenSQLConsole) onOpenSQLConsole();
-                  onClose(); // Закрываем боковую панель
+                  if (onOpenAddCategoryModal) onOpenAddCategoryModal();
+                  onClose();
                 }}
                 style={{ color: 'white', textDecoration: 'none', fontSize: '16px', cursor: 'pointer' }}
               >
-                SQL Консоль
+                Добавить класс запчасти
               </a>
             </li>
-            {/* <<<--- НОВАЯ КНОПКА --->>> */}
             <li style={{ marginBottom: '20px' }}>
               <a
                 href="#!"
                 onClick={(e) => {
                   e.preventDefault();
-                  if (onOpenAddUserModal) onOpenAddUserModal();
-                  onClose(); // Закрываем боковую панель
+                  if (onOpenAddManufacturerModal) onOpenAddManufacturerModal();
+                  onClose();
                 }}
                 style={{ color: 'white', textDecoration: 'none', fontSize: '16px', cursor: 'pointer' }}
               >
-                Добавить пользователя
+                Добавить производителя
               </a>
             </li>
+            {isAdmin && (
+              <>
+                <li style={{ marginBottom: '20px' }}>
+                  <a
+                    href="#!"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      if (onOpenSQLConsole) onOpenSQLConsole();
+                      onClose();
+                    }}
+                    style={{ color: 'white', textDecoration: 'none', fontSize: '16px', cursor: 'pointer' }}
+                  >
+                    SQL Консоль
+                  </a>
+                </li>
+                <li style={{ marginBottom: '20px' }}>
+                  <a
+                    href="#!"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      if (onOpenAddUserModal) onOpenAddUserModal();
+                      onClose();
+                    }}
+                    style={{ color: 'white', textDecoration: 'none', fontSize: '16px', cursor: 'pointer' }}
+                  >
+                    Добавить пользователя
+                  </a>
+                </li>
+              </>
+            )}
           </ul>
         </div>
       </div>

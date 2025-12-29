@@ -11,24 +11,28 @@ import MovementHistoryModal from './MovementHistoryModal';
 import PrintLabelModal from './PrintLabelModal';
 import Sidebar from './Sidebar';
 import SQLConsole from './SQLConsole';
-import AddUserModal from './AddUserModal'; // <= Импортируем новый модал
-import AboutDeveloper from './AboutDeveloper'; // <= Импортируем компонент "О разработчике"
-
+import AddUserModal from './AddUserModal';
+import AboutDeveloper from './AboutDeveloper';
+import AddManufacturerModal from './AddManufacturerModal';
+import AddCategoryModal from './AddCategoryModal'; // <= Импортируем новый компонент
 
 function Dashboard() {
   const [userInfo, setUserInfo] = useState(null);
   const [activeModal, setActiveModal] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sqlConsoleOpen, setSqlConsoleOpen] = useState(false);
-  const [addUserModalOpen, setAddUserModalOpen] = useState(false); // <= Новое состояние
-  const [aboutDeveloperOpen, setAboutDeveloperOpen] = useState(false); // <= Новое состояние для "О разработчике"
+  const [addUserModalOpen, setAddUserModalOpen] = useState(false);
+  const [aboutDeveloperOpen, setAboutDeveloperOpen] = useState(false);
+  const [addManufacturerModalOpen, setAddManufacturerModalOpen] = useState(false);
+  const [addCategoryModalOpen, setAddCategoryModalOpen] = useState(false); // <= Новое состояние
   const token = localStorage.getItem('token');
 
   useEffect(() => {
     if (token) {
       try {
         const payload = JSON.parse(atob(token.split('.')[1]));
-        setUserInfo({ id: payload.id, username: payload.username });
+        setUserInfo({ id: payload.id, username: payload.username, role: payload.role });
+        console.log('User Info from token:', { id: payload.id, username: payload.username, role: payload.role });
       } catch (e) {
         console.error('Invalid token', e);
         window.location.href = '/login';
@@ -38,7 +42,7 @@ function Dashboard() {
 
   const handleLogout = () => {
     localStorage.removeItem('token');
-    window.location.href = '/login'; // Или используйте navigate('/login') если настроена навигация
+    window.location.href = '/login';
   };
 
   const toggleSidebar = () => {
@@ -53,7 +57,6 @@ function Dashboard() {
     setSqlConsoleOpen(false);
   };
 
-  // <<<--- Функции для добавления пользователя --->>>
   const openAddUserModal = () => {
     setAddUserModalOpen(true);
   };
@@ -62,7 +65,6 @@ function Dashboard() {
     setAddUserModalOpen(false);
   };
 
-  // <<<--- Функции для "О разработчике" --->>>
   const openAboutDeveloper = () => {
     setAboutDeveloperOpen(true);
   };
@@ -71,20 +73,42 @@ function Dashboard() {
     setAboutDeveloperOpen(false);
   };
 
+  // <<<--- Функции для "Добавить производителя" --->>>
+  const openAddManufacturerModal = () => {
+    setAddManufacturerModalOpen(true);
+  };
+
+  const closeAddManufacturerModal = () => {
+    setAddManufacturerModalOpen(false);
+  };
+
+  // <<<--- Функции для "Добавить класс" --->>>
+  const openAddCategoryModal = () => {
+    setAddCategoryModalOpen(true);
+  };
+
+  const closeAddCategoryModal = () => {
+    setAddCategoryModalOpen(false);
+  };
+
+  const handleItemAdded = () => {
+    console.log('Item added, refresh needed');
+  };
+
   if (!token) {
-    return <div>Not authenticated. Redirecting...</div>; // На практике редирект должен быть раньше
+    return <div>Not authenticated. Redirecting...</div>;
   }
 
+  const isAdmin = userInfo?.role === 'admin';
+
   return (
-    // <<<--- Вот тут добавим фон --->>>
     <div style={{
-      backgroundImage: 'url(/tracktime.jpg) ', // Замените на реальный URL
+      backgroundImage: 'url(https://via.placeholder.com/1920x1080/4a90e2/ffffff?text=IMS+Dashboard+Background)', // Замените на реальный URL
       backgroundSize: 'cover',
       backgroundPosition: 'center',
       minHeight: '100vh',
     }}>
       <div className="dashboard-layout">
-        {/* Кнопка для открытия боковой панели */}
         <button
           onClick={toggleSidebar}
           style={{
@@ -103,32 +127,30 @@ function Dashboard() {
           ☰
         </button>
 
-        {/* Боковая панель */}
         <Sidebar
           isOpen={sidebarOpen}
           onClose={() => setSidebarOpen(false)}
           onOpenSQLConsole={openSQLConsole}
           onOpenAddUserModal={openAddUserModal}
-          onOpenAboutDeveloper={openAboutDeveloper} // <= Передаём функцию
+          onOpenAboutDeveloper={openAboutDeveloper}
+          onOpenAddManufacturerModal={openAddManufacturerModal}
+          onOpenAddCategoryModal={openAddCategoryModal} // <= Передаём функцию
+          userRole={userInfo?.role}
         />
 
-        {/* Шапка */}
         <header className="dashboard-header">
           <div className="dashboard-header-content">
             <h1 className="dashboard-title">IMS Dashboard</h1>
           </div>
         </header>
 
-        {/* Основной контент */}
         <main className="dashboard-main-content dashboard-main-content-flex">
-          {/* Информация о пользователе */}
           <div className="dashboard-user-info-bar">
             {userInfo && <span className="user-info-text">Welcome, {userInfo.username}!</span>}
           </div>
 
           <h2 className="dashboard-section-title">Основное меню</h2>
 
-          {/* Группа: Управление инвентарём */}
           <div className="dashboard-section-group">
             <div className="dashboard-buttons-grid dashboard-grid-three-wide">
               <button
@@ -151,19 +173,20 @@ function Dashboard() {
                 </div>
               </button>
 
-              <button
-                onClick={() => setActiveModal('dispose')}
-                className="dashboard-button dashboard-button-dispose dashboard-button-wide"
-              >
-                <div className="dashboard-button-content">
-                  <div className="dashboard-button-icon">🗑️</div>
-                  <h3 className="dashboard-button-label">Удалить позицию</h3>
-                </div>
-              </button>
+              {isAdmin && (
+                <button
+                  onClick={() => setActiveModal('dispose')}
+                  className="dashboard-button dashboard-button-dispose dashboard-button-wide"
+                >
+                  <div className="dashboard-button-content">
+                    <div className="dashboard-button-icon">🗑️</div>
+                    <h3 className="dashboard-button-label">Удалить позицию</h3>
+                  </div>
+                </button>
+              )}
             </div>
           </div>
 
-          {/* Группа: Просмотр и история */}
           <div className="dashboard-section-group">
             <h3 className="dashboard-subsection-title">История и печать</h3>
             <div className="dashboard-buttons-grid dashboard-grid-three">
@@ -191,7 +214,6 @@ function Dashboard() {
                 </button>
               </div>
 
-              {/* НОВАЯ КНОПКА "PRINT LABEL" В ГРУППЕ View & History */}
               <div className="dashboard-button-container">
                 <button
                   onClick={() => setActiveModal('printLabel')}
@@ -206,7 +228,6 @@ function Dashboard() {
             </div>
           </div>
 
-          {/* Группа: Управление (дополнительно) */}
           <div className="dashboard-section-group">
             <h3 className="dashboard-subsection-title">Управление</h3>
             <div className="dashboard-buttons-grid dashboard-grid-two">
@@ -236,7 +257,6 @@ function Dashboard() {
             </div>
           </div>
 
-          {/* Кнопка Logout внизу */}
           <div className="dashboard-logout-container">
             <button
               onClick={handleLogout}
@@ -252,14 +272,16 @@ function Dashboard() {
         {activeModal === 'move' && <MoveModal onClose={() => setActiveModal(null)} token={token} />}
         {activeModal === 'dispose' && <DisposeModal onClose={() => setActiveModal(null)} token={token} />}
         {activeModal === 'inventory' && <InventoryModal onClose={() => setActiveModal(null)} token={token} />}
-        {activeModal === 'add' && <AddItemModal onClose={() => setActiveModal(null)} token={token} />}
+        {activeModal === 'add' && <AddItemModal onClose={() => setActiveModal(null)} token={token} onItemAdded={handleItemAdded} />}
         {activeModal === 'addLocation' && <AddLocationModal onClose={() => setActiveModal(null)} token={token} />}
         {activeModal === 'history' && <MovementHistoryModal onClose={() => setActiveModal(null)} token={token} />}
         {activeModal === 'printLabel' && <PrintLabelModal onClose={() => setActiveModal(null)} />}
         {sqlConsoleOpen && <SQLConsole onClose={closeSQLConsole} />}
         {addUserModalOpen && <AddUserModal onClose={closeAddUserModal} />}
-        {/* <<<--- Вот тут добавим модал "О разработчике" --->>> */}
         {aboutDeveloperOpen && <AboutDeveloper onClose={closeAboutDeveloper} />}
+        {addManufacturerModalOpen && <AddManufacturerModal onClose={closeAddManufacturerModal} />}
+        {/* <<<--- Вот тут добавим модал "Добавить класс" --->>> */}
+        {addCategoryModalOpen && <AddCategoryModal onClose={closeAddCategoryModal} />}
       </div>
     </div>
   );

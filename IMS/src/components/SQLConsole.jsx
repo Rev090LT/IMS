@@ -8,7 +8,7 @@ function SQLConsole({ onClose }) {
 
   // <<<--- Вот тут определим шаблоны --->>>
   const queryTemplates = {
-    'Показать все пользователи': 'SELECT id, username, role, created_at FROM users;',
+    'Показать всех пользователей': 'SELECT * FROM users;',
     'Показать все позиции': 'SELECT id, qr_code, name, description, quantity, status, location_id FROM items;',
     'Показать все локации': 'SELECT id, name, description FROM locations;',
     'Показать все перемещения': 'SELECT id, item_id, from_location_id, to_location_id, moved_by_user_id, moved_at FROM movements;',

@@ -137,28 +137,29 @@ router.get('/locations', authenticateToken, async (req, res) => {
   }
 });
 
-router.get('/', authenticateToken, async (req, res) => {
+router.get('/', async (req, res) => {
   try {
-    // ПРАВИЛЬНЫЙ запрос с JOIN
-    const query = `
-      SELECT
+    // <<<--- Вот тут нужно включить все нужные поля --->>>
+    const result = await pool.query(`
+      SELECT 
         i.id,
         i.qr_code,
         i.name,
         i.description,
         i.quantity,
         i.status,
-        i.location_id,
-        l.name AS location_name, -- <-- Вот это создаёт поле location_name
-        i.created_by_username,
-        i.created_at,
-        i.updated_at
+        l.name AS location_name,
+        c.name AS category_name,
+        m.name AS manufacturer_name,
+        i.created_by_username,    -- <<<--- Кто создал
+        i.created_at,            -- <<<--- Когда создано
+        i.updated_at             -- <<<--- Когда обновлено
       FROM items i
-      LEFT JOIN locations l ON i.location_id = l.id -- <-- JOIN с locations
-      ORDER BY i.created_at DESC
-    `;
+      LEFT JOIN locations l ON i.location_id = l.id
+      LEFT JOIN categories c ON i.category_id = c.id
+      LEFT JOIN manufacturers m ON i.manufacturer_id = m.id
+    `);
 
-    const result = await pool.query(query);
     res.json(result.rows);
   } catch (err) {
     console.error('Error fetching items:', err);

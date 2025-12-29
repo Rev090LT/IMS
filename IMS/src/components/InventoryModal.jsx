@@ -75,6 +75,8 @@ return (
                     <th>Количество</th>
                     <th>Статус</th>
                     <th>Местоположение</th> 
+                    <th>Класс</th>
+                    <th>Производитель</th>
                     <th>Создано</th>
                     <th>Дата создания</th>
                     <th>Дата обновления</th>
@@ -95,6 +97,8 @@ return (
                           </span>
                         </td>
                         <td>{item.location_name || 'N/A'}</td>
+                        <td>{item.category_name || 'N/A'}</td>
+                        <td>{item.manufacturer_name || 'N/A'}</td>
                         {/* Отображаем имя создателя */}
                         <td>{item.created_by_username || 'N/A'}</td>
                         <td>{formatDate(item.created_at)}</td>

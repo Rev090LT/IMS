@@ -82,5 +82,19 @@ CREATE TABLE pending_users (
     created_at TIMESTAMP DEFAULT NOW(),
     approved BOOLEAN DEFAULT FALSE -- Оставим на будущее, если решим одобрять вручную
 );
-
+--класс запчасти
+CREATE TABLE categories (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE, -- Например: 'Двигатель', 'Трансмиссия'
+    description TEXT
+);
+-- производитель
+CREATE TABLE manufacturers (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE, -- Например: 'Bosch', 'Mann'
+    contact_info TEXT, -- Контакты, если нужно
+    created_at TIMESTAMP DEFAULT NOW()
+);
+ALTER TABLE items ADD COLUMN category_id INTEGER REFERENCES categories(id);
+ALTER TABLE items ADD COLUMN manufacturer_id INTEGER REFERENCES manufacturers(id);
 TRUNCATE TABLE имя_таблицы; --удалить все из таблицы

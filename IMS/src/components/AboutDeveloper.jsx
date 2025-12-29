@@ -42,18 +42,11 @@ function AboutDeveloper({ onClose }) {
         </div>
 
         <div className="about-developer-body">
-          <p>Разработчик: <strong>Ваше Имя</strong></p>
-          <p>Контакт: <a href="mailto:your.email@example.com">your.email@example.com</a></p>
-          <p>Проект: <strong>IMS (Inventory Management System)</strong></p>
-          <p>Дата создания: <strong>Декабрь 2025</strong></p>
-          <p>Технологии:</p>
-          <ul>
-            <li>Frontend: React, Vite</li>
-            <li>Backend: Node.js, Express</li>
-            <li>Database: PostgreSQL</li>
-            <li>Authentication: JWT</li>
-          </ul>
-          <p>Этот проект создан для управления складским учётом и инвентарём.</p>
+          <p><strong>Разработчик:</strong> TrackTime Performance</p>
+          <p><strong>Контакт:</strong> <a href="mailto:t.simon2005@gmail.com">t.simon2005@gmail.com</a></p>
+          <p><strong>Проект:</strong> IMS (Inventory Management System)</p>
+          <p><strong>Дата создания:</strong> Декабрь 2025</p>
+          <p><strong>Описание:</strong> Система управления складским учетом для автомастерской.</p>
         </div>
       </div>
     </div>

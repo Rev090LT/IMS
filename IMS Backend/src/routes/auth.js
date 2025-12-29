@@ -11,13 +11,30 @@ const router = express.Router();
 router.post('/login', async (req, res) => {
   const { username, password } = req.body;
 
-  const user = await User.findByUsername(username);
+  try {
+    const result = await pool.query('SELECT id, username, password_hash, role FROM users WHERE username = $1', [username]);
+    const user = result.rows[0];
 
-  if (user && await bcrypt.compare(password, user.password_hash)) {
-    const token = jwt.sign({ id: user.id, username: user.username }, process.env.JWT_SECRET, { expiresIn: '365d' });
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const isValid = await bcrypt.compare(password, user.password_hash);
+    if (!isValid) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    // <<<--- Вот тут генерируется токен --->>>
+    const token = jwt.sign(
+      { id: user.id, username: user.username, role: user.role }, // <= Вот тут
+      process.env.JWT_SECRET,
+      { expiresIn: '1h' }
+    );
+
     res.json({ token });
-  } else {
-    res.status(401).json({ error: 'Неверное имя пользователя или пароль' });
+  } catch (err) {
+    console.error('Login error:', err);
+    res.status(500).json({ error: err.message });
   }
 });
 /*
