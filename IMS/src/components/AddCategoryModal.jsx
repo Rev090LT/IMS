@@ -77,7 +77,7 @@ function AddCategoryModal({ onClose, onCategoryAdded }) {
           alignItems: 'center',
           marginBottom: '20px',
         }}>
-          <h3>Добавить класс запчасти</h3>
+          <h3>Добавить категорию запчасти</h3>
           <button
             onClick={onClose}
             style={{

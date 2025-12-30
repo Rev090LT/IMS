@@ -32,7 +32,7 @@ router.post('/', authenticateToken, async (req, res) => {
 // Получить все локации
 router.get('/', authenticateToken, async (req, res) => {
   try {
-    const result = await pool.query('SELECT id, name, description FROM locations ORDER BY name');
+    const result = await pool.query('SELECT id, name FROM locations ORDER BY name');
     res.json(result.rows);
   } catch (err) {
     console.error('Error fetching locations:', err);

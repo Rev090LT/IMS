@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 
 function AddItemModal({ onClose, token, onItemAdded }) {
+  const [qrCode, setQrCode] = useState('');
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [quantity, setQuantity] = useState(1);
@@ -9,6 +10,7 @@ function AddItemModal({ onClose, token, onItemAdded }) {
   const [categoryId, setCategoryId] = useState('');
   const [manufacturerId, setManufacturerId] = useState('');
   const [newManufacturerName, setNewManufacturerName] = useState('');
+  const [newCategoryName, setNewCategoryName] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [categories, setCategories] = useState([]);
@@ -60,7 +62,12 @@ function AddItemModal({ onClose, token, onItemAdded }) {
     fetchData();
   }, [token]);
 
-  // <<<--- Функция для добавления нового производителя (уже есть) --->>>
+  const generateQRCode = () => {
+    const randomFiveDigits = Math.floor(Math.random() * 100000).toString().padStart(5, '0');
+    const newQRCode = `2000000${randomFiveDigits}`;
+    setQrCode(newQRCode);
+  };
+
   const handleAddManufacturer = async () => {
     if (!newManufacturerName.trim()) {
       setError('Введите название производителя');
@@ -92,9 +99,8 @@ function AddItemModal({ onClose, token, onItemAdded }) {
     }
   };
 
-  // <<<--- НОВАЯ ФУНКЦИЯ для добавления новой категории --->>>
   const handleAddCategory = async () => {
-    if (!categoryId.trim()) {
+    if (!newCategoryName.trim()) {
       setError('Введите название класса');
       return;
     }
@@ -106,7 +112,7 @@ function AddItemModal({ onClose, token, onItemAdded }) {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify({ name: categoryId.trim() }),
+        body: JSON.stringify({ name: newCategoryName.trim() }),
       });
 
       const data = await response.json();
@@ -116,7 +122,8 @@ function AddItemModal({ onClose, token, onItemAdded }) {
       }
 
       setCategories(prev => [...prev, data]);
-      setCategoryId(data.id); // Выберем его
+      setCategoryId(data.id);
+      setNewCategoryName('');
       setError('');
     } catch (err) {
       setError(err.message);
@@ -124,12 +131,12 @@ function AddItemModal({ onClose, token, onItemAdded }) {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
+    // e.preventDefault(); // Убрано, так как форма убрана
     setError('');
     setSuccess('');
 
-    if (!name.trim() || !locationId) {
-      setError('Name and Location are required');
+    if (!qrCode.trim() || !name.trim() || !locationId) {
+      setError('QR Code, Name and Location are required');
       return;
     }
 
@@ -151,6 +158,7 @@ function AddItemModal({ onClose, token, onItemAdded }) {
           'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
+          qr_code: qrCode.trim(),
           name: name.trim(),
           description: description.trim(),
           quantity: quantityNum,
@@ -168,8 +176,9 @@ function AddItemModal({ onClose, token, onItemAdded }) {
       }
 
       setSuccess('Item added successfully');
-      if (onItemAdded) onItemAdded(data.item);
+      if (onItemAdded) onItemAdded(data);
 
+      setQrCode('');
       setName('');
       setDescription('');
       setQuantity(1);
@@ -177,6 +186,7 @@ function AddItemModal({ onClose, token, onItemAdded }) {
       setCategoryId('');
       setManufacturerId('');
       setNewManufacturerName('');
+      setNewCategoryName('');
     } catch (err) {
       setError(err.message);
     }
@@ -224,7 +234,40 @@ function AddItemModal({ onClose, token, onItemAdded }) {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit}>
+        <div> {/* <<<--- Вот тут убрана обёртка form */}
+          <div style={{ marginBottom: '15px' }}>
+            <label>QR-код:</label>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <input
+                type="text"
+                value={qrCode}
+                onChange={(e) => setQrCode(e.target.value)}
+                required
+                placeholder="Введите или сгенерируйте QR-код"
+                style={{
+                  flex: 1,
+                  padding: '8px',
+                  border: '1px solid #ccc',
+                  borderRadius: '4px',
+                }}
+              />
+              <button
+                type="button"
+                onClick={generateQRCode}
+                style={{
+                  padding: '8px 12px',
+                  backgroundColor: '#3498db',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                }}
+              >
+                Сгенерировать
+              </button>
+            </div>
+          </div>
+
           <div style={{ marginBottom: '15px' }}>
             <label>Название:</label>
             <input
@@ -309,73 +352,74 @@ function AddItemModal({ onClose, token, onItemAdded }) {
             </select>
           </div>
 
-          {/* <<<--- Вот тут обновим выбор категории --->>> */}
           <div style={{ marginBottom: '15px' }}>
-            <label>Класс запчасти:</label>
-            <select
-              value={categoryId}
-              onChange={(e) => setCategoryId(e.target.value)}
-              style={{
-                width: 'calc(100% - 110px)',
-                padding: '8px',
-                border: '1px solid #ccc',
-                borderRadius: '4px',
-                marginRight: '10px',
-              }}
-            >
-              <option value="">Выберите класс</option>
-              {categories.map(cat => (
-                <option key={cat.id} value={cat.id}>{cat.name}</option>
-              ))}
-            </select>
-            <button
-              type="button"
-              onClick={handleAddCategory}
-              style={{
-                padding: '8px 12px',
-                backgroundColor: '#3498db',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-              }}
-            >
-              + Добавить
-            </button>
+            <label>Категория запчасти:</label>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <select
+                value={categoryId}
+                onChange={(e) => setCategoryId(e.target.value)}
+                style={{
+                  flex: 1,
+                  padding: '8px',
+                  border: '1px solid #ccc',
+                  borderRadius: '4px',
+                }}
+              >
+                <option value="">Выберите класс</option>
+                {categories.map(cat => (
+                  <option key={cat.id} value={cat.id}>{cat.name}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={handleAddCategory}
+                style={{
+                  padding: '8px 12px',
+                  backgroundColor: '#3498db',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                }}
+              >
+                + Добавить
+              </button>
+            </div>
           </div>
 
           <div style={{ marginBottom: '15px' }}>
             <label>Производитель:</label>
-            <select
-              value={manufacturerId}
-              onChange={(e) => setManufacturerId(e.target.value)}
-              style={{
-                width: 'calc(100% - 110px)',
-                padding: '8px',
-                border: '1px solid #ccc',
-                borderRadius: '4px',
-                marginRight: '10px',
-              }}
-            >
-              <option value="">Выберите производителя</option>
-              {manufacturers.map(man => (
-                <option key={man.id} value={man.id}>{man.name}</option>
-              ))}
-            </select>
-            <button
-              type="button"
-              onClick={handleAddManufacturer}
-              style={{
-                padding: '8px 12px',
-                backgroundColor: '#3498db',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-              }}
-            >
-              + Добавить
-            </button>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <select
+                value={manufacturerId}
+                onChange={(e) => setManufacturerId(e.target.value)}
+                style={{
+                  flex: 1,
+                  padding: '8px',
+                  border: '1px solid #ccc',
+                  borderRadius: '4px',
+                }}
+              >
+                <option value="">Выберите производителя</option>
+                {manufacturers.map(man => (
+                  <option key={man.id} value={man.id}>{man.name}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={handleAddManufacturer}
+                style={{
+                  padding: '8px 12px',
+                  backgroundColor: '#3498db',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                }}
+              >
+                + Добавить
+              </button>
+            </div>
           </div>
 
           <div style={{ marginBottom: '15px' }}>
@@ -385,6 +429,22 @@ function AddItemModal({ onClose, token, onItemAdded }) {
               value={newManufacturerName}
               onChange={(e) => setNewManufacturerName(e.target.value)}
               placeholder="Введите название нового производителя"
+              style={{
+                width: '100%',
+                padding: '8px',
+                border: '1px solid #ccc',
+                borderRadius: '4px',
+              }}
+            />
+          </div>
+
+          <div style={{ marginBottom: '15px' }}>
+            <label>Новая категория запчасти:</label>
+            <input
+              type="text"
+              value={newCategoryName}
+              onChange={(e) => setNewCategoryName(e.target.value)}
+              placeholder="Введите название нового класса"
               style={{
                 width: '100%',
                 padding: '8px',
@@ -434,7 +494,8 @@ function AddItemModal({ onClose, token, onItemAdded }) {
               Отмена
             </button>
             <button
-              type="submit"
+              type="button" // <<<--- Вот тут
+              onClick={handleSubmit} // <<<--- Вот тут
               style={{
                 padding: '8px 16px',
                 backgroundColor: '#3498db',
@@ -447,7 +508,7 @@ function AddItemModal({ onClose, token, onItemAdded }) {
               Добавить
             </button>
           </div>
-        </form>
+        </div>
       </div>
     </div>
   );

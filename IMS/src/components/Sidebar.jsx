@@ -1,6 +1,6 @@
 import React from 'react';
 
-function Sidebar({ isOpen, onClose, onOpenSQLConsole, onOpenAddUserModal, onOpenAboutDeveloper, onOpenAddManufacturerModal, onOpenAddCategoryModal, userRole }) { // <= Добавим пропс
+function Sidebar({ isOpen, onClose, onOpenSQLConsole, onOpenAddUserModal, onOpenAboutDeveloper, onOpenAddManufacturerModal, onOpenAddCategoryModal, onOpenNodeLogConsole, userRole }) { // <= Добавим пропс
   const isAdmin = userRole === 'admin';
 
   return (
@@ -39,7 +39,7 @@ function Sidebar({ isOpen, onClose, onOpenSQLConsole, onOpenAddUserModal, onOpen
         }}
       >
         <div style={{ padding: '20px', paddingTop: '60px' }}>
-          <h3>Меню</h3>
+          <h3>Меню админа</h3>
           <ul style={{ listStyleType: 'none', padding: 0 }}>
             <li style={{ marginBottom: '20px' }}>
               <a
@@ -59,7 +59,6 @@ function Sidebar({ isOpen, onClose, onOpenSQLConsole, onOpenAddUserModal, onOpen
                 Настройки
               </a>
             </li>
-            {/* <<<--- Вот тут добавим кнопку "Добавить класс" --->>> */}
             <li style={{ marginBottom: '20px' }}>
               <a
                 href="#!"
@@ -70,7 +69,7 @@ function Sidebar({ isOpen, onClose, onOpenSQLConsole, onOpenAddUserModal, onOpen
                 }}
                 style={{ color: 'white', textDecoration: 'none', fontSize: '16px', cursor: 'pointer' }}
               >
-                Добавить класс запчасти
+                Добавить категорию запчасти
               </a>
             </li>
             <li style={{ marginBottom: '20px' }}>
@@ -84,6 +83,20 @@ function Sidebar({ isOpen, onClose, onOpenSQLConsole, onOpenAddUserModal, onOpen
                 style={{ color: 'white', textDecoration: 'none', fontSize: '16px', cursor: 'pointer' }}
               >
                 Добавить производителя
+              </a>
+            </li>
+            {/* <<<--- Вот тут добавим кнопку Node.js Log Console (доступна всем) --->>> */}
+            <li style={{ marginBottom: '20px' }}>
+              <a
+                href="#!"
+                onClick={(e) => {
+                  e.preventDefault();
+                  if (onOpenNodeLogConsole) onOpenNodeLogConsole();
+                  onClose();
+                }}
+                style={{ color: 'white', textDecoration: 'none', fontSize: '16px', cursor: 'pointer' }}
+              >
+                Node.js Log Console
               </a>
             </li>
             {isAdmin && (

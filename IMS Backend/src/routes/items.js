@@ -1,7 +1,7 @@
 import express from 'express';
 import { Item } from '../models/Item.js';
 import authenticateToken from '../middleware/auth.js';
-import pool from '../config/db.js'; // <= Добавим это
+import pool from '../config/db.js';
 
 const router = express.Router();
 
@@ -21,7 +21,7 @@ router.get('/:qr_code', authenticateToken, async (req, res) => {
 
 // Списание товара
 router.post('/dispose', authenticateToken, async (req, res) => {
-  const { qr_code, quantity } = req.body; // <= Принимаем qr_code
+  const { qr_code, quantity } = req.body;
 
   if (!qr_code || quantity <= 0) {
     return res.status(400).json({ error: 'QR код и количество обязательны' });
@@ -67,24 +67,26 @@ router.post('/dispose', authenticateToken, async (req, res) => {
 });
 
 // Перемещение товара (новый маршрут)
-
-// IMS Backend/src/routes/items.js
 router.post('/move', authenticateToken, async (req, res) => {
-  const { item_id, from_location_id, to_location_id, quantity, comment } = req.body;
+  const { qr_code, from_location_id, to_location_id, quantity, comment } = req.body; // <= Вот тут
 
-  if (!item_id || !from_location_id || !to_location_id || quantity <= 0) {
-    return res.status(400).json({ error: 'All fields are required' });
+  console.log('Received POST /api/items/move:', { qr_code, from_location_id, to_location_id, quantity, comment });
+
+  if (!qr_code || !from_location_id || !to_location_id || quantity <= 0) { // <= Вот тут
+    return res.status(400).json({ error: 'QR Code, From Location, To Location, and Quantity are required' }); // <= Вот тук
   }
 
   try {
-    // Найдём товар
-    const itemResult = await pool.query('SELECT * FROM items WHERE id = $1 AND location_id = $2', [item_id, from_location_id]);
+    // <<<--- Вот тут найдём item_id по qr_code --->>>
+    const itemResult = await pool.query('SELECT id FROM items WHERE qr_code = $1 AND location_id = $2', [qr_code, from_location_id]);
     if (itemResult.rows.length === 0) {
       return res.status(404).json({ error: 'Item not found in the specified location' });
     }
 
     const item = itemResult.rows[0];
+    const item_id = item.id; // <= Вот тут
 
+    // ... (остальной код, используя item_id)
     if (item.quantity < quantity) {
       return res.status(400).json({ error: 'Not enough quantity to move' });
     }
@@ -101,7 +103,7 @@ router.post('/move', authenticateToken, async (req, res) => {
     }
 
     // Проверим, существует ли уже товар в новой локации
-    const existingItemResult = await pool.query('SELECT id FROM items WHERE qr_code = $1 AND location_id = $2', [item.qr_code, to_location_id]);
+    const existingItemResult = await pool.query('SELECT id FROM items WHERE qr_code = $1 AND location_id = $2', [qr_code, to_location_id]); // <= Вот тут
     if (existingItemResult.rows.length > 0) {
       // Объединим с существующим товаром
       await pool.query('UPDATE items SET quantity = quantity + $1 WHERE id = $2', [quantity, existingItemResult.rows[0].id]);
@@ -110,7 +112,7 @@ router.post('/move', authenticateToken, async (req, res) => {
       await pool.query(`
         INSERT INTO items (qr_code, name, description, quantity, status, location_id, created_by_user_id)
         VALUES ($1, $2, $3, $4, $5, $6, $7)
-      `, [item.qr_code, item.name, item.description, quantity, 'warehouse', to_location_id, item.created_by_user_id]);
+      `, [qr_code, item.name, item.description, quantity, 'warehouse', to_location_id, item.created_by_user_id]);
     }
 
     // Запишем в историю
@@ -125,21 +127,11 @@ router.post('/move', authenticateToken, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-// Алиас для совместимости с AddItemModal и MoveModal
-router.get('/locations', authenticateToken, async (req, res) => {
-  try {
-    // Просто делаем запрос к базе данных для получения локаций
-    const result = await pool.query('SELECT id, name FROM locations ORDER BY name');
-    res.json(result.rows);
-  } catch (err) {
-    console.error('Error fetching locations for items route:', err);
-    res.status(500).json({ error: err.message });
-  }
-});
+
+// <<<--- УБЕРЁМ маршрут /locations из items.js --->>>
 
 router.get('/', async (req, res) => {
   try {
-    // <<<--- Вот тут нужно включить все нужные поля --->>>
     const result = await pool.query(`
       SELECT 
         i.id,
@@ -151,9 +143,9 @@ router.get('/', async (req, res) => {
         l.name AS location_name,
         c.name AS category_name,
         m.name AS manufacturer_name,
-        i.created_by_username,    -- <<<--- Кто создал
-        i.created_at,            -- <<<--- Когда создано
-        i.updated_at             -- <<<--- Когда обновлено
+        i.created_by_username,
+        i.created_at,
+        i.updated_at
       FROM items i
       LEFT JOIN locations l ON i.location_id = l.id
       LEFT JOIN categories c ON i.category_id = c.id
@@ -167,8 +159,12 @@ router.get('/', async (req, res) => {
   }
 });
 
+// <<<--- Вот тут обновлённый POST /api/items --->>>
 router.post('/', authenticateToken, async (req, res) => {
-  const { qr_code, name, description, quantity, location_id } = req.body;
+  const { qr_code, name, description, quantity, location_id, category_id, manufacturer_id } = req.body;
+
+  console.log('Received POST /api/items:', { qr_code, name, description, quantity, location_id, category_id, manufacturer_id });
+  console.log('req.user:', req.user);
 
   if (!qr_code || !name || !quantity || quantity <= 0 || !location_id) {
     return res.status(400).json({ error: 'qr_code, name, quantity, and location_id are required' });
@@ -193,14 +189,15 @@ router.post('/', authenticateToken, async (req, res) => {
       return;
     }
 
-    // Создаём новый товар
+    // <<<--- Вот тут добавлены category_id и manufacturer_id в INSERT --->>>
     const result = await pool.query(
-      `INSERT INTO items (qr_code, name, description, quantity, status, location_id, created_by_user_id, created_by_username)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-      [qr_code, name, description, quantity, 'warehouse', location_id, req.user.id, req.user.username]
+      `INSERT INTO items (qr_code, name, description, quantity, status, location_id, category_id, manufacturer_id, created_by_user_id, created_by_username)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+      [qr_code, name, description, quantity, 'warehouse', location_id, category_id || null, manufacturer_id || null, req.user.id, req.user.username]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
+    console.error('Error in POST /api/items:', err);
     if (err.message.includes('duplicate key value violates unique constraint')) {
       res.status(400).json({ error: 'Item with this QR code already exists' });
     } else {

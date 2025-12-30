@@ -14,7 +14,8 @@ import SQLConsole from './SQLConsole';
 import AddUserModal from './AddUserModal';
 import AboutDeveloper from './AboutDeveloper';
 import AddManufacturerModal from './AddManufacturerModal';
-import AddCategoryModal from './AddCategoryModal'; // <= Импортируем новый компонент
+import AddCategoryModal from './AddCategoryModal';
+import NodeLogConsole from './NodeLogConsole'; // <= Импортируем новый компонент
 
 function Dashboard() {
   const [userInfo, setUserInfo] = useState(null);
@@ -24,7 +25,8 @@ function Dashboard() {
   const [addUserModalOpen, setAddUserModalOpen] = useState(false);
   const [aboutDeveloperOpen, setAboutDeveloperOpen] = useState(false);
   const [addManufacturerModalOpen, setAddManufacturerModalOpen] = useState(false);
-  const [addCategoryModalOpen, setAddCategoryModalOpen] = useState(false); // <= Новое состояние
+  const [addCategoryModalOpen, setAddCategoryModalOpen] = useState(false);
+  const [nodeLogConsoleOpen, setNodeLogConsoleOpen] = useState(false); // <= Новое состояние
   const token = localStorage.getItem('token');
 
   useEffect(() => {
@@ -73,7 +75,6 @@ function Dashboard() {
     setAboutDeveloperOpen(false);
   };
 
-  // <<<--- Функции для "Добавить производителя" --->>>
   const openAddManufacturerModal = () => {
     setAddManufacturerModalOpen(true);
   };
@@ -82,13 +83,21 @@ function Dashboard() {
     setAddManufacturerModalOpen(false);
   };
 
-  // <<<--- Функции для "Добавить класс" --->>>
   const openAddCategoryModal = () => {
     setAddCategoryModalOpen(true);
   };
 
   const closeAddCategoryModal = () => {
     setAddCategoryModalOpen(false);
+  };
+
+  // <<<--- Функции для Node.js Log Console --->>>
+  const openNodeLogConsole = () => {
+    setNodeLogConsoleOpen(true);
+  };
+
+  const closeNodeLogConsole = () => {
+    setNodeLogConsoleOpen(false);
   };
 
   const handleItemAdded = () => {
@@ -124,7 +133,7 @@ function Dashboard() {
             cursor: 'pointer',
           }}
         >
-          ☰
+          ☰ Меню админа
         </button>
 
         <Sidebar
@@ -134,7 +143,8 @@ function Dashboard() {
           onOpenAddUserModal={openAddUserModal}
           onOpenAboutDeveloper={openAboutDeveloper}
           onOpenAddManufacturerModal={openAddManufacturerModal}
-          onOpenAddCategoryModal={openAddCategoryModal} // <= Передаём функцию
+          onOpenAddCategoryModal={openAddCategoryModal}
+          onOpenNodeLogConsole={openNodeLogConsole} // <= Передаём функцию
           userRole={userInfo?.role}
         />
 
@@ -280,8 +290,9 @@ function Dashboard() {
         {addUserModalOpen && <AddUserModal onClose={closeAddUserModal} />}
         {aboutDeveloperOpen && <AboutDeveloper onClose={closeAboutDeveloper} />}
         {addManufacturerModalOpen && <AddManufacturerModal onClose={closeAddManufacturerModal} />}
-        {/* <<<--- Вот тут добавим модал "Добавить класс" --->>> */}
         {addCategoryModalOpen && <AddCategoryModal onClose={closeAddCategoryModal} />}
+        {/* <<<--- Вот тут добавим Node.js Log Console --->>> */}
+        {nodeLogConsoleOpen && <NodeLogConsole onClose={closeNodeLogConsole} />}
       </div>
     </div>
   );
