@@ -315,22 +315,6 @@ function AddItemModal({ onClose, token, onItemAdded }) {
             />
           </div>
 
-          <div style={{ marginBottom: '15px' }}>
-            <label>Статус:</label>
-            <select
-              value={status}
-              onChange={(e) => setStatus(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '8px',
-                border: '1px solid #ccc',
-                borderRadius: '4px',
-              }}
-            >
-              <option value="active">active</option>
-              <option value="inactive">inactive</option>
-            </select>
-          </div>
 
           <div style={{ marginBottom: '15px' }}>
             <label>Локация:</label>

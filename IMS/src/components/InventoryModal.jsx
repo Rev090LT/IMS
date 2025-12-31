@@ -251,9 +251,9 @@ function InventoryModal({ onClose, token }) {
                   <th style={{ border: '1px solid #ddd', padding: '8px' }}>Локация</th>
                   <th style={{ border: '1px solid #ddd', padding: '8px' }}>Категория</th>
                   <th style={{ border: '1px solid #ddd', padding: '8px' }}>Производитель</th>
-                  <th style={{ border: '1px solid #ddd', padding: '8px' }}>Кем создано</th>
-                  <th style={{ border: '1px solid #ddd', padding: '8px' }}>Когда создано</th>
-                  <th style={{ border: '1px solid #ddd', padding: '8px' }}>Когда обновлено</th>
+                  <th style={{ border: '1px solid #ddd', padding: '8px' }}>Создано</th>
+                  <th style={{ border: '1px solid #ddd', padding: '8px' }}>Дата создания</th>
+                  <th style={{ border: '1px solid #ddd', padding: '8px' }}>Дата обновления</th>
                 </tr>
               </thead>
               <tbody>

@@ -1,12 +1,12 @@
-// IMS/src/components/Login.jsx
-
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-
+import LoadingSpinner from './LoadingSpinner';
+import backgroundImage from './back.jpg'
 function Login() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
   // Состояния для регистрации (без телефона)
@@ -21,6 +21,7 @@ function Login() {
 
   const handleLogin = async (e) => {
     e.preventDefault();
+    setLoading(true);
     try {
       setError('');
       const response = await fetch(`${API_BASE}/auth/login`, {
@@ -33,18 +34,23 @@ function Login() {
       if (response.ok && data.token) {
         localStorage.setItem('token', data.token);
         navigate('/dashboard');
+        setLoading(false);
       } else {
         setError(data.error || 'Login failed');
+        setLoading(false); // <= Выключаем загрузку при ошибке
       }
     } catch (err) {
       setError('Network error or server is unreachable');
       console.error(err);
+      setLoading(false); // <= Выключаем загрузку при ошибке
     }
   };
 
   const handleRegisterRequest = async (e) => {
     e.preventDefault();
+    setLoading(true); // <= Включаем загрузку
     try {
+      setError(''); // <= Очищаем ошибку
       const response = await fetch(`${API_BASE}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -59,12 +65,16 @@ function Login() {
       }
     } catch (err) {
       setError('Network error or server is unreachable');
+    } finally {
+      setLoading(false); // <= Выключаем загрузку
     }
   };
 
   const handleConfirmRegistration = async (e) => {
     e.preventDefault();
+    setLoading(true); // <= Включаем загрузку
     try {
+      setError(''); // <= Очищаем ошибку
       const response = await fetch(`${API_BASE}/auth/confirm-registration`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -79,11 +89,17 @@ function Login() {
       }
     } catch (err) {
       setError('Network error or server is unreachable');
+    } finally {
+      setLoading(false); // <= Выключаем загрузку
     }
   };
 
   return (
     <div className="login-container">
+      {/* <<<--- Вот тут добавим спиннер --->>> */}
+
+      {loading && <LoadingSpinner message={mode === 'login' ? 'Вход в систему...' : mode === 'register' && !regSuccess ? 'Запрос регистрации...' : 'Подтверждение регистрации...'} />}
+      
       <div className="login-box">
         {mode === 'login' && (
           <>

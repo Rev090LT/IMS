@@ -16,6 +16,7 @@ import AboutDeveloper from './AboutDeveloper';
 import AddManufacturerModal from './AddManufacturerModal';
 import AddCategoryModal from './AddCategoryModal';
 import NodeLogConsole from './NodeLogConsole'; // <= Импортируем новый компонент
+import backgroundImage from './tracktime.jpg'
 
 function Dashboard() {
   const [userInfo, setUserInfo] = useState(null);
@@ -112,10 +113,14 @@ function Dashboard() {
 
   return (
     <div style={{
-      backgroundImage: 'url(https://via.placeholder.com/1920x1080/4a90e2/ffffff?text=IMS+Dashboard+Background)', // Замените на реальный URL
+      backgroundImage: `url(${backgroundImage})`,
       backgroundSize: 'cover',
       backgroundPosition: 'center',
       minHeight: '100vh',
+      margin: 0, // <= Вот тут
+      padding: 0, // <= Вот тук
+      position: 'relative', // <= Вот тут
+      zIndex: 0, // <= Вот тук
     }}>
       <div className="dashboard-layout">
         <button
@@ -133,7 +138,7 @@ function Dashboard() {
             cursor: 'pointer',
           }}
         >
-          ☰ Меню админа
+          ☰ 
         </button>
 
         <Sidebar
