@@ -36,6 +36,7 @@ function Dashboard() {
         const payload = JSON.parse(atob(token.split('.')[1]));
         setUserInfo({ id: payload.id, username: payload.username, role: payload.role });
         console.log('User Info from token:', { id: payload.id, username: payload.username, role: payload.role });
+        console.log('Dashboard token:', token); // <= Вот тут
       } catch (e) {
         console.error('Invalid token', e);
         window.location.href = '/login';
@@ -290,7 +291,8 @@ function Dashboard() {
         {activeModal === 'add' && <AddItemModal onClose={() => setActiveModal(null)} token={token} onItemAdded={handleItemAdded} />}
         {activeModal === 'addLocation' && <AddLocationModal onClose={() => setActiveModal(null)} token={token} />}
         {activeModal === 'history' && <MovementHistoryModal onClose={() => setActiveModal(null)} token={token} />}
-        {activeModal === 'printLabel' && <PrintLabelModal onClose={() => setActiveModal(null)} />}
+        {/* <<<--- Вот тут передаём token в PrintLabelModal --->>> */}
+        {activeModal === 'printLabel' && <PrintLabelModal onClose={() => setActiveModal(null)} token={token} />}
         {sqlConsoleOpen && <SQLConsole onClose={closeSQLConsole} />}
         {addUserModalOpen && <AddUserModal onClose={closeAddUserModal} />}
         {aboutDeveloperOpen && <AboutDeveloper onClose={closeAboutDeveloper} />}

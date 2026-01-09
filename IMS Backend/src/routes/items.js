@@ -205,5 +205,30 @@ router.post('/', authenticateToken, async (req, res) => {
     }
   }
 });
+router.get('/search-by-name/:name', authenticateToken, async (req, res) => {
+  const { name } = req.params;
+
+  if (!name) {
+    return res.status(400).json({ error: 'Name is required' });
+  }
+
+  try {
+    // Ищем товары по имени (регистронезависимо, частичное совпадение)
+    const result = await pool.query(
+      'SELECT qr_code, name FROM items WHERE LOWER(name) LIKE LOWER($1) ORDER BY name LIMIT 10', // <= Возвращаем 10 результатов, сортируем по имени
+      [`%${name}%`]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Items not found' });
+    }
+
+    res.json(result.rows); // <= Вернём массив
+  } catch (err) {
+    console.error('Error searching items by name:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 
 export default router;
