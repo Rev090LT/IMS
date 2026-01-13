@@ -1,16 +1,26 @@
 import React, { useState } from 'react';
 import CarListModal from './CarListModal';
+import SoldPartsModal from './SoldPartsModal'; // <<<--- Импортируем модуль
 
-function Sidebar({ isOpen, onClose, onOpenSQLConsole, onOpenAddUserModal, onOpenAboutDeveloper, onOpenAddManufacturerModal, onOpenAddCategoryModal, onOpenNodeLogConsole, userRole }) { // <= Добавим пропс
-  const [showCarListModal, setShowCarListModal] = useState(false); // <<<--- Новое состояние
+function Sidebar({ isOpen, onClose, onOpenSQLConsole, onOpenAddUserModal, onOpenAboutDeveloper, onOpenAddManufacturerModal, onOpenAddCategoryModal, onOpenNodeLogConsole, userRole }) {
+  const [showCarListModal, setShowCarListModal] = useState(false);
+  const [showSoldPartsModal, setShowSoldPartsModal] = useState(false); // <<<--- Новое состояние
   const isAdmin = userRole === 'admin';
 
-  const openCarListModal = () => { // <<<--- Новая функция
+  const openCarListModal = () => {
     setShowCarListModal(true);
   };
 
-  const closeCarListModal = () => { // <<<--- Новая функция
+  const closeCarListModal = () => {
     setShowCarListModal(false);
+  };
+
+  const openSoldPartsModal = () => { // <<<--- Новая функция
+    setShowSoldPartsModal(true);
+  };
+
+  const closeSoldPartsModal = () => { // <<<--- Новая функция
+    setShowSoldPartsModal(false);
   };
 
   return (
@@ -113,12 +123,25 @@ function Sidebar({ isOpen, onClose, onOpenSQLConsole, onOpenAddUserModal, onOpen
                 href="#!"
                 onClick={(e) => {
                   e.preventDefault();
-                  openCarListModal(); // <<<--- Новая кнопка
+                  openCarListModal();
                   onClose();
                 }}
                 style={{ color: 'white', textDecoration: 'none', fontSize: '16px', cursor: 'pointer' }}
               >
                 Автомобили в разборе
+              </a>
+            </li>
+            <li style={{ marginBottom: '20px' }}>
+              <a
+                href="#!"
+                onClick={(e) => {
+                  e.preventDefault();
+                  openSoldPartsModal(); // <<<--- Новая кнопка
+                  onClose();
+                }}
+                style={{ color: 'white', textDecoration: 'none', fontSize: '16px', cursor: 'pointer' }}
+              >
+                 Проданные запчасти
               </a>
             </li>
             {isAdmin && (
@@ -154,6 +177,9 @@ function Sidebar({ isOpen, onClose, onOpenSQLConsole, onOpenAddUserModal, onOpen
           </ul>
         </div>
       </div>
+      {showSoldPartsModal && (
+        <SoldPartsModal onClose={closeSoldPartsModal} token={localStorage.getItem('token')} />
+      )}
       {showCarListModal && (
         <CarListModal onClose={closeCarListModal} token={localStorage.getItem('token')} />
       )}

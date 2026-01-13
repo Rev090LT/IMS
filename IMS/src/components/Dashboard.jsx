@@ -9,6 +9,7 @@ import AddItemModal from './AddItemModal';
 import AddLocationModal from './AddLocationModal';
 import MovementHistoryModal from './MovementHistoryModal';
 import PrintLabelModal from './PrintLabelModal';
+import SellPartModal from './SellPartModal'; // <<<--- Импортируем модуль
 import Sidebar from './Sidebar';
 import SQLConsole from './SQLConsole';
 import AddUserModal from './AddUserModal';
@@ -29,6 +30,7 @@ function Dashboard() {
   const [addManufacturerModalOpen, setAddManufacturerModalOpen] = useState(false);
   const [addCategoryModalOpen, setAddCategoryModalOpen] = useState(false);
   const [addCarModalOpen, setAddCarModalOpen] = useState(false);
+  const [sellPartModalOpen, setSellPartModalOpen] = useState(false); // <<<--- Новое состояние
   const [nodeLogConsoleOpen, setNodeLogConsoleOpen] = useState(false);
   const token = localStorage.getItem('token');
 
@@ -101,6 +103,14 @@ function Dashboard() {
 
   const closeAddCarModal = () => {
     setAddCarModalOpen(false);
+  };
+
+  const openSellPartModal = () => { // <<<--- Новая функция
+    setSellPartModalOpen(true);
+  };
+
+  const closeSellPartModal = () => { // <<<--- Новая функция
+    setSellPartModalOpen(false);
   };
 
   const openNodeLogConsole = () => {
@@ -255,7 +265,7 @@ function Dashboard() {
 
           <div className="dashboard-section-group">
             <h3 className="dashboard-subsection-title">Управление</h3>
-            <div className="dashboard-buttons-grid dashboard-grid-three"> {/* <<<--- Сделали три колонки --- */}
+            <div className="dashboard-buttons-grid dashboard-grid-three">
               <div className="dashboard-button-container">
                 <button
                   onClick={() => setActiveModal('addLocation')}
@@ -282,16 +292,37 @@ function Dashboard() {
 
               <div className="dashboard-button-container">
                 <button
-                  onClick={openAddCarModal} // <<<--- Новая кнопка
+                  onClick={openAddCarModal}
                   className="dashboard-button dashboard-button-add-car"
                   style={{
-                    backgroundColor: '#9b59b6', // <<<--- Цвет кнопки
+                    backgroundColor: '#9b59b6',
                     color: 'white',
                   }}
                 >
                   <div className="dashboard-button-content">
                     <div className="dashboard-button-icon">🚗</div>
                     <h3 className="dashboard-button-label">Добавить автомобиль</h3>
+                  </div>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="dashboard-section-group">
+            <h3 className="dashboard-subsection-title">Продажа</h3>
+            <div className="dashboard-buttons-grid dashboard-grid-one">
+              <div className="dashboard-button-container">
+                <button
+                  onClick={openSellPartModal} // <<<--- Новая кнопка
+                  className="dashboard-button dashboard-button-sell-part"
+                  style={{
+                    backgroundColor: '#e74c3c', // <<<--- Красный цвет
+                    color: 'white',
+                  }}
+                >
+                  <div className="dashboard-button-content">
+                    <div className="dashboard-button-icon">💰</div>
+                    <h3 className="dashboard-button-label">Продажа запчасти</h3>
                   </div>
                 </button>
               </div>
@@ -317,7 +348,8 @@ function Dashboard() {
         {activeModal === 'addLocation' && <AddLocationModal onClose={() => setActiveModal(null)} token={token} />}
         {activeModal === 'history' && <MovementHistoryModal onClose={() => setActiveModal(null)} token={token} />}
         {activeModal === 'printLabel' && <PrintLabelModal onClose={() => setActiveModal(null)} token={token} />}
-        {addCarModalOpen && <AddCarModal onClose={closeAddCarModal} token={token} />} {/* <<<--- Новое модальное окно --- */}
+        {addCarModalOpen && <AddCarModal onClose={closeAddCarModal} token={token} />}
+        {sellPartModalOpen && <SellPartModal onClose={closeSellPartModal} token={token} />} {/* <<<--- Новое модальное окно --- */}
         {sqlConsoleOpen && <SQLConsole onClose={closeSQLConsole} />}
         {addUserModalOpen && <AddUserModal onClose={closeAddUserModal} />}
         {aboutDeveloperOpen && <AboutDeveloper onClose={closeAboutDeveloper} />}

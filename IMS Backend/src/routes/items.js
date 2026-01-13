@@ -207,9 +207,10 @@ router.post('/move', authenticateToken, async (req, res) => {
 // <<<--- УБЕРЁМ маршрут /locations из items.js --->>>
 
 // <<<--- Обновим маршрут GET / --->
+// <<<--- Обновим маршрут GET / --->
 router.get('/', async (req, res) => {
   try {
-    // <<<--- Добавим новые поля в SELECT --->
+    // <<<--- Добавим i.location_id в SELECT --->
     const result = await pool.query(`
       SELECT 
         i.id,
@@ -218,15 +219,16 @@ router.get('/', async (req, res) => {
         i.description,
         i.quantity,
         i.status,
+        i.location_id,  // <<<--- Вот тут
         l.name AS location_name,
         c.name AS category_name,
         m.name AS manufacturer_name,
         i.created_by_username,
         i.created_at,
         i.updated_at,
-        i.part_number,  -- <<<--- Новое поле
-        i.car_model,    -- <<<--- Новое поле
-        i.vin_number    -- <<<--- Новое поле
+        i.part_number,
+        i.car_model,
+        i.vin_number
       FROM items i
       LEFT JOIN locations l ON i.location_id = l.id
       LEFT JOIN categories c ON i.category_id = c.id
