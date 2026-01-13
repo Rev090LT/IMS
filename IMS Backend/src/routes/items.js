@@ -209,8 +209,7 @@ router.post('/move', authenticateToken, async (req, res) => {
 // <<<--- Обновим маршрут GET / --->
 // <<<--- Обновим маршрут GET / --->
 router.get('/', async (req, res) => {
-  try {
-    // <<<--- Добавим i.location_id в SELECT --->
+  try {    
     const result = await pool.query(`
       SELECT 
         i.id,
@@ -219,7 +218,7 @@ router.get('/', async (req, res) => {
         i.description,
         i.quantity,
         i.status,
-        i.location_id,  // <<<--- Вот тут
+        i.location_id,  
         l.name AS location_name,
         c.name AS category_name,
         m.name AS manufacturer_name,
@@ -319,9 +318,8 @@ router.put('/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
   const { name, description, quantity, status, location_id, category_id, manufacturer_id, part_number, car_model, vin_number } = req.body;
 
-  console.log('Received PUT /api/items/:id:', { id, name, description, quantity, status, location_id, category_id, manufacturer_id, part_number, car_model, vin_number });
-
-  if (!name || !quantity || !status || !location_id) {
+  // <<<--- Обновим проверку --->
+  if (!name || quantity === null || quantity === undefined || !status || location_id === null || location_id === undefined) {
     return res.status(400).json({ error: 'Name, quantity, status, and location_id are required' });
   }
 
@@ -340,6 +338,47 @@ router.put('/:id', authenticateToken, async (req, res) => {
   } catch (err) {
     console.error('Error updating item:', err);
     res.status(500).json({ error: 'Failed to update item' });
+  }
+});
+
+router.post('/sell-part', authenticateToken, async (req, res) => {
+  const { item_id, selling_price, buyer_name, buyer_info, buyer_phone } = req.body; 
+
+  if (!item_id || !selling_price) {
+    return res.status(400).json({ error: 'Item ID and selling price are required' });
+  }
+
+  try {
+    const itemResult = await pool.query('SELECT * FROM items WHERE id = $1', [item_id]);
+    if (itemResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Item not found' });
+    }
+
+    const item = itemResult.rows[0];
+
+    if (item.quantity <= 0) {
+      return res.status(400).json({ error: 'Item is out of stock' });
+    }
+
+    const newQuantity = item.quantity - 1;
+    await pool.query('UPDATE items SET quantity = $1, status = $2 WHERE id = $3', [newQuantity, 'sold', item_id]);
+
+    if (newQuantity === 0) {
+      await pool.query('UPDATE items SET status = $1 WHERE id = $2', ['sold', item_id]);
+    }
+
+    const saleDate = new Date().toISOString().split('T')[0];
+
+    const soldResult = await pool.query(
+      `INSERT INTO sold_parts (item_id, item_name, item_description, part_number, car_model, vin_number, selling_price, sale_date, buyer_name, buyer_info, buyer_phone)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+      [item_id, item.name, item.description, item.part_number, item.car_model, item.vin_number, selling_price, saleDate, buyer_name || null, buyer_info || null, buyer_phone || null] // <<<--- Передадим buyer_phone
+    );
+
+    res.json({ message: 'Item sold successfully', sold_record: soldResult.rows[0] });
+  } catch (err) {
+    console.error('Error selling item:', err);
+    res.status(500).json({ error: 'Failed to sell item' });
   }
 });
 export default router;

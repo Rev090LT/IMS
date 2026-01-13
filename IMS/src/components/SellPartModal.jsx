@@ -5,7 +5,12 @@ function SellPartModal({ onClose, token }) {
   const [items, setItems] = useState([]);
   const [selectedItem, setSelectedItem] = useState(null);
   const [price, setPrice] = useState('');
+  const [buyerName, setBuyerName] = useState('');
+  const [buyerInfo, setBuyerInfo] = useState('');
+  const [buyerPhone, setBuyerPhone] = useState('');
+  const [saleDate, setSaleDate] = useState(new Date().toISOString().split('T')[0]);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(true);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
   const [receiptData, setReceiptData] = useState(null);
@@ -13,7 +18,6 @@ function SellPartModal({ onClose, token }) {
   useEffect(() => {
     const fetchItems = async () => {
       try {
-        console.log('Fetching items with token:', token);
         const response = await fetch('/api/items', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -23,14 +27,9 @@ function SellPartModal({ onClose, token }) {
         }
 
         const data = await response.json();
-        console.log('Fetched items:', data);
-        console.log('All statuses:', data.map(item => item.status));
-        // <<<--- Фильтруем только доступные запчасти (не проданные) --->
-        const availableItems = data.filter(item => item.status !== 'sold');
-        console.log('Available items:', availableItems);
+        const availableItems = data.filter(item => item.status === 'available' || item.status === 'warehouse');
         setItems(availableItems);
       } catch (err) {
-        console.error('Error fetching items:', err);
         setError(err.message);
       } finally {
         setLoading(false);
@@ -42,78 +41,71 @@ function SellPartModal({ onClose, token }) {
 
   const handleItemSelect = (e) => {
     const itemId = e.target.value;
-    console.log('Selected item ID:', itemId);
     if (itemId) {
       const item = items.find(i => i.id === parseInt(itemId));
-      console.log('Found item:', item);
       setSelectedItem(item);
     } else {
       setSelectedItem(null);
     }
   };
 
-const handleSell = async () => {
-  if (!selectedItem) {
-    setError('Выберите запчасть');
-    return;
-  }
-
-  if (!price || parseFloat(price) <= 0) {
-    setError('Введите корректную цену');
-    return;
-  }
-
-  // <<<--- Проверим, есть ли location_id --->
-  if (!selectedItem.location_id) {
-    setError('У запчасти нет location_id');
-    return;
-  }
-
-  console.log('Sending to PUT /api/items/:id:', {
-    name: selectedItem.name,
-    description: selectedItem.description,
-    quantity: selectedItem.quantity - 1,
-    status: 'sold',
-    location_id: selectedItem.location_id,
-    category_id: selectedItem.category_id,
-    manufacturer_id: selectedItem.manufacturer_id,
-    part_number: selectedItem.part_number,
-    car_model: selectedItem.car_model,
-    vin_number: selectedItem.vin_number
-  });
-
-  try {
-    // <<<--- Обновим статус запчасти на "sold" --->
-    const updateResponse = await fetch(`/api/items/${selectedItem.id}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        name: selectedItem.name,
-        description: selectedItem.description,
-        quantity: selectedItem.quantity - 1,
-        status: 'sold',
-        location_id: selectedItem.location_id,
-        category_id: selectedItem.category_id,
-        manufacturer_id: selectedItem.manufacturer_id,
-        part_number: selectedItem.part_number,
-        car_model: selectedItem.car_model,
-        vin_number: selectedItem.vin_number
-      }),
-    });
-
-    if (!updateResponse.ok) {
-      const errorData = await updateResponse.json();
-      throw new Error(errorData.error || 'Failed to update item');
+  const handleSell = async () => {
+    if (!selectedItem) {
+      setError('Выберите запчасть');
+      return;
     }
 
-    // ...
-  } catch (err) {
-    setError(err.message);
-  }
-};
+    if (!price || parseFloat(price) <= 0) {
+      setError('Введите корректную цену');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/items/sell-part', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          item_id: selectedItem.id,
+          selling_price: parseFloat(price),
+          buyer_name: buyerName,
+          buyer_info: buyerInfo,
+          buyer_phone: buyerPhone
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to sell item');
+      }
+
+      setSuccess('Запчасть успешно продана!');
+
+      // <<<--- Подготовим данные для чека --->
+      const receipt = {
+        item: selectedItem,
+        selling_price: parseFloat(price),
+        sale_date: saleDate,
+        buyer_name: buyerName,
+        buyer_info: buyerInfo,
+        buyer_phone: buyerPhone
+      };
+
+      setReceiptData(receipt);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const handlePrintReceipt = () => {
+    if (receiptData) {
+      setShowReceiptModal(true);
+    }
+  };
+
   if (loading) return <div>Loading...</div>;
 
   return (
@@ -130,7 +122,7 @@ const handleSell = async () => {
       zIndex: 10000,
     }}>
       <div className="modal-content" style={{
-        width: '600px',
+        width: '800px',
         backgroundColor: 'white',
         borderRadius: '8px',
         padding: '20px',
@@ -169,58 +161,138 @@ const handleSell = async () => {
           </div>
         )}
 
-        <div style={{ marginBottom: '15px' }}>
-          <label>Выберите запчасть:</label>
-          <select
-            value={selectedItem ? selectedItem.id : ''}
-            onChange={handleItemSelect}
-            style={{
-              width: '100%',
-              padding: '8px',
-              border: '1px solid #ccc',
-              borderRadius: '4px',
-            }}
-          >
-            <option value="">Выберите запчасть</option>
-            {items.map(item => (
-              <option key={item.id} value={item.id}>
-                {item.name} (Кол-во: {item.quantity}, VIN: {item.vin_number})
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {selectedItem && (
-          <div style={{ marginBottom: '15px', padding: '10px', backgroundColor: '#f9f9f9', borderRadius: '4px' }}>
-            <h4>Информация о запчасти:</h4>
-            <p><strong>QR-код:</strong> {selectedItem.qr_code}</p>
-            <p><strong>Наименование:</strong> {selectedItem.name}</p>
-            <p><strong>Описание:</strong> {selectedItem.description}</p>
-            <p><strong>Part Number:</strong> {selectedItem.part_number}</p>
-            <p><strong>Модель машины:</strong> {selectedItem.car_model}</p>
-            <p><strong>VIN:</strong> {selectedItem.vin_number}</p>
+        {success && (
+          <div style={{
+            color: 'green',
+            marginBottom: '15px',
+            padding: '10px',
+            backgroundColor: '#e6ffe6',
+            border: '1px solid green',
+            borderRadius: '4px',
+          }}>
+            {success}
           </div>
         )}
 
-        <div style={{ marginBottom: '15px' }}>
-          <label>Цена (руб):</label>
-          <input
-            type="number"
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
-            step="0.01"
-            min="0"
-            placeholder="Введите цену"
-            style={{
-              width: '100%',
-              padding: '8px',
-              border: '1px solid #ccc',
-              borderRadius: '4px',
-            }}
-          />
+        <div style={{ display: 'flex', gap: '20px' }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ marginBottom: '15px' }}>
+              <label>Выберите запчасть:</label>
+              <select
+                value={selectedItem ? selectedItem.id : ''}
+                onChange={handleItemSelect}
+                style={{
+                  width: '100%',
+                  padding: '8px',
+                  border: '1px solid #ccc',
+                  borderRadius: '4px',
+                }}
+              >
+                <option value="">Выберите запчасть</option>
+                {items.map(item => (
+                  <option key={item.id} value={item.id}>
+                    {item.name} (Кол-во: {item.quantity}, VIN: {item.vin_number})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {selectedItem && (
+              <div style={{ marginBottom: '15px', padding: '10px', backgroundColor: '#f9f9f9', borderRadius: '4px' }}>
+                <h4>Информация о запчасти:</h4>
+                <p><strong>QR-код:</strong> {selectedItem.qr_code}</p>
+                <p><strong>Наименование:</strong> {selectedItem.name}</p>
+                <p><strong>Описание:</strong> {selectedItem.description}</p>
+                <p><strong>Part Number:</strong> {selectedItem.part_number}</p>
+                <p><strong>Модель машины:</strong> {selectedItem.car_model}</p>
+                <p><strong>VIN:</strong> {selectedItem.vin_number}</p>
+              </div>
+            )}
+
+            <div style={{ marginBottom: '15px' }}>
+              <label>Цена (руб):</label>
+              <input
+                type="number"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+                step="0.01"
+                min="0"
+                placeholder="Введите цену"
+                style={{
+                  width: '100%',
+                  padding: '8px',
+                  border: '1px solid #ccc',
+                  borderRadius: '4px',
+                }}
+              />
+            </div>
+
+            <div style={{ marginBottom: '15px' }}>
+              <label>Дата продажи:</label>
+              <input
+                type="date"
+                value={saleDate}
+                onChange={(e) => setSaleDate(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '8px',
+                  border: '1px solid #ccc',
+                  borderRadius: '4px',
+                }}
+              />
+            </div>
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ marginBottom: '15px' }}>
+              <label>ФИО контрагента:</label>
+              <input
+                type="text"
+                value={buyerName}
+                onChange={(e) => setBuyerName(e.target.value)}
+                placeholder="Введите ФИО контрагента"
+                style={{
+                  width: '100%',
+                  padding: '8px',
+                  border: '1px solid #ccc',
+                  borderRadius: '4px',
+                }}
+              />
+            </div>
+
+            <div style={{ marginBottom: '15px' }}>
+              <label>Телефон контрагента:</label>
+              <input
+                type="tel"
+                value={buyerPhone}
+                onChange={(e) => setBuyerPhone(e.target.value)}
+                placeholder="Введите телефон контрагента"
+                style={{
+                  width: '100%',
+                  padding: '8px',
+                  border: '1px solid #ccc',
+                  borderRadius: '4px',
+                }}
+              />
+            </div>
+
+            <div style={{ marginBottom: '15px' }}>
+              <label>Информация о контрагенте:</label>
+              <textarea
+                value={buyerInfo}
+                onChange={(e) => setBuyerInfo(e.target.value)}
+                placeholder="Введите информацию о контрагенте"
+                style={{
+                  width: '100%',
+                  padding: '8px',
+                  border: '1px solid #ccc',
+                  borderRadius: '4px',
+                }}
+              />
+            </div>
+          </div>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
           <button
             onClick={onClose}
             style={{
@@ -245,6 +317,21 @@ const handleSell = async () => {
           >
             Продать
           </button>
+          {receiptData && (
+            <button
+              onClick={handlePrintReceipt}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: '#3498db',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+              }}
+            >
+              Печать чека
+            </button>
+          )}
         </div>
       </div>
 

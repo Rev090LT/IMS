@@ -106,6 +106,20 @@ CREATE TABLE cars (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE sold_parts (
+  id SERIAL PRIMARY KEY,
+  item_id INTEGER REFERENCES items(id) ON DELETE CASCADE,
+  item_name VARCHAR(255) NOT NULL,
+  item_description TEXT,
+  part_number VARCHAR(255),
+  car_model VARCHAR(255),
+  vin_number VARCHAR(255),
+  selling_price DECIMAL(10, 2) NOT NULL,
+  sale_date DATE DEFAULT CURRENT_DATE,
+  buyer_info TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 ALTER TABLE items ADD COLUMN category_id INTEGER REFERENCES categories(id);
 ALTER TABLE items ADD COLUMN manufacturer_id INTEGER REFERENCES manufacturers(id);
 ALTER TABLE items ADD COLUMN part_number VARCHAR(255);
