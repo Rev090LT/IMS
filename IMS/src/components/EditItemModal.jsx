@@ -1,44 +1,23 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 
-function AddItemModal({ onClose, token, onItemAdded }) {
-  // <<<--- Загружаем значения из localStorage --->
-  const [qrCode, setQrCode] = useState(() => localStorage.getItem('addItem_qrCode') || '');
-  const [name, setName] = useState(() => localStorage.getItem('addItem_name') || '');
-  const [description, setDescription] = useState(() => localStorage.getItem('addItem_description') || '');
-  const [quantity, setQuantity] = useState(() => localStorage.getItem('addItem_quantity') || '1');
-  const [status, setStatus] = useState(() => localStorage.getItem('addItem_status') || 'active');
-  const [locationId, setLocationId] = useState(() => localStorage.getItem('addItem_locationId') || '');
-  const [categoryId, setCategoryId] = useState(() => localStorage.getItem('addItem_categoryId') || '');
-  const [manufacturerId, setManufacturerId] = useState(() => localStorage.getItem('addItem_manufacturerId') || '');
-  const [newManufacturerName, setNewManufacturerName] = useState('');
-  const [newCategoryName, setNewCategoryName] = useState('');
-  const [partNumber, setPartNumber] = useState(() => localStorage.getItem('addItem_partNumber') || '');
-  const [carModel, setCarModel] = useState(() => localStorage.getItem('addItem_carModel') || '');
-  const [vinNumber, setVinNumber] = useState(() => localStorage.getItem('addItem_vinNumber') || '');
-  const [selectedCarId, setSelectedCarId] = useState(() => localStorage.getItem('addItem_selectedCarId') || '');
+function EditItemModal({ item, onClose, token, onItemUpdated }) {
+  const [name, setName] = useState(item.name);
+  const [description, setDescription] = useState(item.description);
+  const [quantity, setQuantity] = useState(item.quantity);
+  const [status, setStatus] = useState(item.status);
+  const [locationId, setLocationId] = useState(item.location_id);
+  const [categoryId, setCategoryId] = useState(item.category_id);
+  const [manufacturerId, setManufacturerId] = useState(item.manufacturer_id);
+  const [partNumber, setPartNumber] = useState(item.part_number);
+  const [carModel, setCarModel] = useState(item.car_model);
+  const [vinNumber, setVinNumber] = useState(item.vin_number);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [loading, setLoading] = useState(false);
   const [categories, setCategories] = useState([]);
   const [manufacturers, setManufacturers] = useState([]);
   const [locations, setLocations] = useState([]);
   const [cars, setCars] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  // <<<--- Сохраняем значения в localStorage --->
-  useEffect(() => {
-    localStorage.setItem('addItem_qrCode', qrCode);
-    localStorage.setItem('addItem_name', name);
-    localStorage.setItem('addItem_description', description);
-    localStorage.setItem('addItem_quantity', quantity);
-    localStorage.setItem('addItem_status', status);
-    localStorage.setItem('addItem_locationId', locationId);
-    localStorage.setItem('addItem_categoryId', categoryId);
-    localStorage.setItem('addItem_manufacturerId', manufacturerId);
-    localStorage.setItem('addItem_partNumber', partNumber);
-    localStorage.setItem('addItem_carModel', carModel);
-    localStorage.setItem('addItem_vinNumber', vinNumber);
-    localStorage.setItem('addItem_selectedCarId', selectedCarId);
-  }, [qrCode, name, description, quantity, status, locationId, categoryId, manufacturerId, partNumber, carModel, vinNumber, selectedCarId]);
+  const [selectedCarId, setSelectedCarId] = useState('');
 
   useEffect(() => {
     const fetchData = async () => {
@@ -73,15 +52,19 @@ function AddItemModal({ onClose, token, onItemAdded }) {
         setManufacturers(mansData);
         setLocations(locsData);
         setCars(carsData);
+
+        // <<<--- Найдём автомобиль по vin_number --->
+        const matchedCar = carsData.find(car => car.vin === item.vin_number);
+        if (matchedCar) {
+          setSelectedCarId(matchedCar.id);
+        }
       } catch (err) {
         setError(err.message);
-      } finally {
-        setLoading(false);
       }
     };
 
     fetchData();
-  }, [token]);
+  }, [token, item.vin_number]);
 
   // <<<--- Функция выбора автомобиля --->
   const handleCarSelect = (e) => {
@@ -100,17 +83,9 @@ function AddItemModal({ onClose, token, onItemAdded }) {
     }
   };
 
-  const generateQRCode = () => {
-    const randomFiveDigits = Math.floor(Math.random() * 100000).toString().padStart(5, '0');
-    const newQRCode = `2000000${randomFiveDigits}`;
-    setQrCode(newQRCode);
-  };
-
   const handleAddManufacturer = async () => {
-    if (!newManufacturerName.trim()) {
-      setError('Введите название производителя');
-      return;
-    }
+    const newManName = prompt('Введите название производителя:');
+    if (!newManName) return;
 
     try {
       const response = await fetch('/api/lookup/manufacturers', {
@@ -119,7 +94,7 @@ function AddItemModal({ onClose, token, onItemAdded }) {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify({ name: newManufacturerName.trim() }),
+        body: JSON.stringify({ name: newManName.trim() }),
       });
 
       const data = await response.json();
@@ -130,18 +105,14 @@ function AddItemModal({ onClose, token, onItemAdded }) {
 
       setManufacturers(prev => [...prev, data]);
       setManufacturerId(data.id);
-      setNewManufacturerName('');
-      setError('');
     } catch (err) {
-      setError(err.message);
+      alert(err.message);
     }
   };
 
   const handleAddCategory = async () => {
-    if (!newCategoryName.trim()) {
-      setError('Введите название класса');
-      return;
-    }
+    const newCatName = prompt('Введите название категории:');
+    if (!newCatName) return;
 
     try {
       const response = await fetch('/api/lookup/categories', {
@@ -150,7 +121,7 @@ function AddItemModal({ onClose, token, onItemAdded }) {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify({ name: newCategoryName.trim() }),
+        body: JSON.stringify({ name: newCatName.trim() }),
       });
 
       const data = await response.json();
@@ -161,103 +132,52 @@ function AddItemModal({ onClose, token, onItemAdded }) {
 
       setCategories(prev => [...prev, data]);
       setCategoryId(data.id);
-      setNewCategoryName('');
-      setError('');
     } catch (err) {
-      setError(err.message);
+      alert(err.message);
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    setSuccess('');
-
-    if (!qrCode.trim() || !name.trim() || !locationId) {
-      setError('QR Code, Name and Location are required');
-      return;
-    }
-
-    const quantityNum = parseInt(quantity);
-    const locationIdNum = parseInt(locationId);
-    const categoryIdNum = categoryId ? parseInt(categoryId) : null;
-    const manufacturerIdNum = manufacturerId ? parseInt(manufacturerId) : null;
-
-    if (isNaN(quantityNum) || isNaN(locationIdNum) || (categoryId && isNaN(categoryIdNum)) || (manufacturerId && isNaN(manufacturerIdNum))) {
-      setError('Invalid data');
-      return;
-    }
+    setLoading(true);
 
     try {
-      const response = await fetch('/api/items', {
-        method: 'POST',
+      const response = await fetch(`/api/items/${item.id}`, {
+        method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
-          qr_code: qrCode.trim(),
-          name: name.trim(),
-          description: description.trim(),
-          quantity: quantityNum,
+          name,
+          description,
+          quantity: parseInt(quantity),
           status,
-          location_id: locationIdNum,
-          category_id: categoryIdNum,
-          manufacturer_id: manufacturerIdNum,
-          part_number: partNumber.trim(),
-          car_model: carModel.trim(),
-          vin_number: vinNumber.trim()
+          location_id: parseInt(locationId),
+          category_id: categoryId ? parseInt(categoryId) : null,
+          manufacturer_id: manufacturerId ? parseInt(manufacturerId) : null,
+          part_number: partNumber,
+          car_model: carModel,
+          vin_number: vinNumber
         }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || 'Error adding item');
+        throw new Error(data.error || 'Failed to update item');
       }
 
-      setSuccess('Item added successfully');
-      if (onItemAdded) onItemAdded(data);
-
-      // <<<--- Очищаем localStorage при успешном добавлении --->
-      localStorage.removeItem('addItem_qrCode');
-      localStorage.removeItem('addItem_name');
-      localStorage.removeItem('addItem_description');
-      localStorage.removeItem('addItem_quantity');
-      localStorage.removeItem('addItem_status');
-      localStorage.removeItem('addItem_locationId');
-      localStorage.removeItem('addItem_categoryId');
-      localStorage.removeItem('addItem_manufacturerId');
-      localStorage.removeItem('addItem_partNumber');
-      localStorage.removeItem('addItem_carModel');
-      localStorage.removeItem('addItem_vinNumber');
-      localStorage.removeItem('addItem_selectedCarId');
-
-      setQrCode('');
-      setName('');
-      setDescription('');
-      setQuantity('1');
-      setStatus('active');
-      setLocationId('');
-      setCategoryId('');
-      setManufacturerId('');
-      setPartNumber('');
-      setCarModel('');
-      setVinNumber('');
-      setSelectedCarId('');
-      setNewManufacturerName('');
-      setNewCategoryName('');
+      alert('Позиция успешно обновлена!');
+      onItemUpdated(data);
+      onClose();
     } catch (err) {
       setError(err.message);
-    }
+    } finally {
+        setLoading(false);
+      }
   };
-
-  // <<<--- Очищаем localStorage при закрытии --->
-  const handleClose = () => {
-    onClose();
-  };
-
-  if (loading) return <div>Loading...</div>;
 
   return (
     <div className="modal-overlay" style={{
@@ -285,9 +205,9 @@ function AddItemModal({ onClose, token, onItemAdded }) {
           alignItems: 'center',
           marginBottom: '20px',
         }}>
-          <h3>Добавить позицию</h3>
+          <h3>Редактировать позицию</h3>
           <button
-            onClick={handleClose}
+            onClick={onClose}
             style={{
               background: 'none',
               border: 'none',
@@ -302,35 +222,18 @@ function AddItemModal({ onClose, token, onItemAdded }) {
         <form onSubmit={handleSubmit}>
           <div style={{ marginBottom: '15px' }}>
             <label>QR-код:</label>
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <input
-                type="text"
-                value={qrCode}
-                onChange={(e) => setQrCode(e.target.value)}
-                required
-                placeholder="Введите или сгенерируйте QR-код"
-                style={{
-                  flex: 1,
-                  padding: '8px',
-                  border: '1px solid #ccc',
-                  borderRadius: '4px',
-                }}
-              />
-              <button
-                type="button"
-                onClick={generateQRCode}
-                style={{
-                  padding: '8px 12px',
-                  backgroundColor: '#3498db',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                }}
-              >
-                Сгенерировать
-              </button>
-            </div>
+            <input
+              type="text"
+              value={item.qr_code}
+              readOnly
+              style={{
+                width: '100%',
+                padding: '8px',
+                border: '1px solid #ccc',
+                borderRadius: '4px',
+                backgroundColor: '#f5f5f5',
+              }}
+            />
           </div>
 
           <div style={{ marginBottom: '15px' }}>
@@ -381,6 +284,25 @@ function AddItemModal({ onClose, token, onItemAdded }) {
           </div>
 
           <div style={{ marginBottom: '15px' }}>
+            <label>Статус:</label>
+            <select
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '8px',
+                border: '1px solid #ccc',
+                borderRadius: '4px',
+              }}
+            >
+              <option value="available">Доступно</option>
+              <option value="reserved">Зарезервировано</option>
+              <option value="sold">Продано</option>
+              <option value="disposed">Утилизировано</option>
+            </select>
+          </div>
+
+          <div style={{ marginBottom: '15px' }}>
             <label>Автомобиль:</label>
             <select
               value={selectedCarId}
@@ -395,7 +317,7 @@ function AddItemModal({ onClose, token, onItemAdded }) {
               <option value="">Выберите автомобиль</option>
               {cars.map(car => (
                 <option key={car.id} value={car.id}>
-                  {car.brand} {car.model} {car.year ? `(${car.year})` : ''} (VIN: {car.vin}) {/* <<<--- Добавили год --- */}
+                  {car.brand} {car.model} (VIN: {car.vin})
                 </option>
               ))}
             </select>
@@ -543,38 +465,6 @@ function AddItemModal({ onClose, token, onItemAdded }) {
             </div>
           </div>
 
-          <div style={{ marginBottom: '15px' }}>
-            <label>Новый производитель:</label>
-            <input
-              type="text"
-              value={newManufacturerName}
-              onChange={(e) => setNewManufacturerName(e.target.value)}
-              placeholder="Введите название нового производителя"
-              style={{
-                width: '100%',
-                padding: '8px',
-                border: '1px solid #ccc',
-                borderRadius: '4px',
-              }}
-            />
-          </div>
-
-          <div style={{ marginBottom: '15px' }}>
-            <label>Новая категория запчасти:</label>
-            <input
-              type="text"
-              value={newCategoryName}
-              onChange={(e) => setNewCategoryName(e.target.value)}
-              placeholder="Введите название нового класса"
-              style={{
-                width: '100%',
-                padding: '8px',
-                border: '1px solid #ccc',
-                borderRadius: '4px',
-              }}
-            />
-          </div>
-
           {error && (
             <div style={{
               color: 'red',
@@ -588,23 +478,10 @@ function AddItemModal({ onClose, token, onItemAdded }) {
             </div>
           )}
 
-          {success && (
-            <div style={{
-              color: 'green',
-              marginBottom: '15px',
-              padding: '10px',
-              backgroundColor: '#e6ffe6',
-              border: '1px solid green',
-              borderRadius: '4px',
-            }}>
-              {success}
-            </div>
-          )}
-
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
             <button
               type="button"
-              onClick={handleClose}
+              onClick={onClose}
               style={{
                 padding: '8px 16px',
                 border: '1px solid #ccc',
@@ -616,6 +493,7 @@ function AddItemModal({ onClose, token, onItemAdded }) {
             </button>
             <button
               type="submit"
+              disabled={loading}
               style={{
                 padding: '8px 16px',
                 backgroundColor: '#3498db',
@@ -625,7 +503,7 @@ function AddItemModal({ onClose, token, onItemAdded }) {
                 cursor: 'pointer',
               }}
             >
-              Добавить
+              {loading ? 'Обновление...' : 'Обновить'}
             </button>
           </div>
         </form>
@@ -634,4 +512,4 @@ function AddItemModal({ onClose, token, onItemAdded }) {
   );
 }
 
-export default AddItemModal;
+export default EditItemModal;

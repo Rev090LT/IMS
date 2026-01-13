@@ -1,16 +1,17 @@
 import React, { useState, useEffect } from 'react';
+import EditItemModal from './EditItemModal';
 
 function InventoryModal({ onClose, token }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [searchTerm, setSearchTerm] = useState(''); // Для поиска по имени
-  const [selectedCategory, setSelectedCategory] = useState(''); // Для фильтрации по категории
-  const [selectedManufacturer, setSelectedManufacturer] = useState(''); // Для фильтрации по производителю
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [selectedManufacturer, setSelectedManufacturer] = useState('');
   const [categories, setCategories] = useState([]);
   const [manufacturers, setManufacturers] = useState([]);
+  const [editingItem, setEditingItem] = useState(null);
 
-  // <<<--- Загрузим категории и производителей для фильтров --->>>
   useEffect(() => {
     const fetchFilters = async () => {
       try {
@@ -38,14 +39,12 @@ function InventoryModal({ onClose, token }) {
         setManufacturers(mansData);
       } catch (err) {
         console.error('Error fetching filters:', err);
-        // setError(err.message); // Не будем показывать ошибку, если фильтры не загрузились
       }
     };
 
     fetchFilters();
   }, [token]);
 
-  // <<<--- Загрузим список товаров --->>>
   useEffect(() => {
     const fetchItems = async () => {
       try {
@@ -71,13 +70,16 @@ function InventoryModal({ onClose, token }) {
     fetchItems();
   }, [token]);
 
-  // <<<--- Функция для фильтрации и поиска --->>>
   const filteredItems = items.filter(item => {
     const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = !selectedCategory || item.category_name === selectedCategory;
     const matchesManufacturer = !selectedManufacturer || item.manufacturer_name === selectedManufacturer;
     return matchesSearch && matchesCategory && matchesManufacturer;
   });
+
+  const handleItemUpdated = (updatedItem) => {
+    setItems(prev => prev.map(item => item.id === updatedItem.id ? updatedItem : item));
+  };
 
   if (loading) return <div>Loading...</div>;
 
@@ -173,7 +175,6 @@ function InventoryModal({ onClose, token }) {
           </button>
         </div>
 
-        {/* <<<--- Вот тут добавим панель фильтров и поиска --->>> */}
         <div style={{
           marginBottom: '20px',
           padding: '10px',
@@ -251,9 +252,13 @@ function InventoryModal({ onClose, token }) {
                   <th style={{ border: '1px solid #ddd', padding: '8px' }}>Локация</th>
                   <th style={{ border: '1px solid #ddd', padding: '8px' }}>Категория</th>
                   <th style={{ border: '1px solid #ddd', padding: '8px' }}>Производитель</th>
+                  <th style={{ border: '1px solid #ddd', padding: '8px' }}>Part Number</th>
+                  <th style={{ border: '1px solid #ddd', padding: '8px' }}>Модель машины</th>
+                  <th style={{ border: '1px solid #ddd', padding: '8px' }}>VIN номер</th>
                   <th style={{ border: '1px solid #ddd', padding: '8px' }}>Создано</th>
                   <th style={{ border: '1px solid #ddd', padding: '8px' }}>Дата создания</th>
                   <th style={{ border: '1px solid #ddd', padding: '8px' }}>Дата обновления</th>
+                  <th style={{ border: '1px solid #ddd', padding: '8px' }}>Действия</th>
                 </tr>
               </thead>
               <tbody>
@@ -267,9 +272,27 @@ function InventoryModal({ onClose, token }) {
                     <td style={{ border: '1px solid #ddd', padding: '8px' }}>{item.location_name}</td>
                     <td style={{ border: '1px solid #ddd', padding: '8px' }}>{item.category_name || 'N/A'}</td>
                     <td style={{ border: '1px solid #ddd', padding: '8px' }}>{item.manufacturer_name || 'N/A'}</td>
+                    <td style={{ border: '1px solid #ddd', padding: '8px' }}>{item.part_number || 'N/A'}</td>
+                    <td style={{ border: '1px solid #ddd', padding: '8px' }}>{item.car_model || 'N/A'}</td>
+                    <td style={{ border: '1px solid #ddd', padding: '8px' }}>{item.vin_number || 'N/A'}</td>
                     <td style={{ border: '1px solid #ddd', padding: '8px' }}>{item.created_by_username || 'N/A'}</td>
                     <td style={{ border: '1px solid #ddd', padding: '8px' }}>{item.created_at}</td>
                     <td style={{ border: '1px solid #ddd', padding: '8px' }}>{item.updated_at}</td>
+                    <td style={{ border: '1px solid #ddd', padding: '8px' }}>
+                      <button
+                        onClick={() => setEditingItem(item)}
+                        style={{
+                          padding: '4px 8px',
+                          backgroundColor: '#3498db',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Редактировать
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -277,6 +300,15 @@ function InventoryModal({ onClose, token }) {
           )}
         </div>
       </div>
+
+      {editingItem && (
+        <EditItemModal
+          item={editingItem}
+          onClose={() => setEditingItem(null)}
+          token={token}
+          onItemUpdated={handleItemUpdated}
+        />
+      )}
     </div>
   );
 }

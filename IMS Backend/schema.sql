@@ -95,6 +95,21 @@ CREATE TABLE manufacturers (
     contact_info TEXT, -- Контакты, если нужно
     created_at TIMESTAMP DEFAULT NOW()
 );
+
+CREATE TABLE cars (
+  id SERIAL PRIMARY KEY,
+  brand VARCHAR(255) NOT NULL,
+  model VARCHAR(255) NOT NULL,
+  vin VARCHAR(255) UNIQUE NOT NULL,
+  arrival_date DATE NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 ALTER TABLE items ADD COLUMN category_id INTEGER REFERENCES categories(id);
 ALTER TABLE items ADD COLUMN manufacturer_id INTEGER REFERENCES manufacturers(id);
+ALTER TABLE items ADD COLUMN part_number VARCHAR(255);
+ALTER TABLE items ADD COLUMN car_model VARCHAR(255);
+ALTER TABLE items ADD COLUMN vin_number VARCHAR(255);
+ALTER TABLE cars ADD COLUMN year INTEGER;
 TRUNCATE TABLE имя_таблицы; --удалить все из таблицы

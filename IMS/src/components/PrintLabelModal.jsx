@@ -4,18 +4,17 @@ import { useReactToPrint } from 'react-to-print';
 
 function PrintLabelModal({ onClose, token }) {
   const [itemName, setItemName] = useState('');
-  const [inventoryNumber, setInventoryNumber] = useState(''); // <= Используем как QR-код
-  const [originalItemName, setOriginalItemName] = useState(''); // <= Сохраняем оригинальное имя
-  const [originalInventoryNumber, setOriginalInventoryNumber] = useState(''); // <= Сохраняем оригинальный QR-код
+  const [inventoryNumber, setInventoryNumber] = useState('');
+  const [originalItemName, setOriginalItemName] = useState('');
+  const [originalInventoryNumber, setOriginalInventoryNumber] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [template, setTemplate] = useState('75x120');
   const [loading, setLoading] = useState(false);
-  const [searchResults, setSearchResults] = useState([]); // <= Новое состояние для результатов поиска
-  const [showDropdown, setShowDropdown] = useState(false); // <= Новое состояние для отображения выпадающего списка
+  const [searchResults, setSearchResults] = useState([]);
+  const [showDropdown, setShowDropdown] = useState(false);
   const componentRef = useRef();
 
-  // <<<--- Вот тут функция для получения списка наименований по части имени --->
   const fetchItemNamesByName = async (name) => {
     if (!name.trim()) {
       setSearchResults([]);
@@ -25,25 +24,15 @@ function PrintLabelModal({ onClose, token }) {
 
     if (!token) {
       setError('Authentication token is missing');
-      setSearchResults([]);
-      setShowDropdown(false);
       return;
     }
 
     setLoading(true);
-    setError('');
     try {
       const response = await fetch(`/api/items/search-by-name/${encodeURIComponent(name)}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        }
+        headers: { 'Authorization': `Bearer ${token}` },
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
-      }
-
+      if (!response.ok) throw new Error('Failed to search items');
       const data = await response.json();
       setSearchResults(data);
       setShowDropdown(true);
@@ -56,44 +45,6 @@ function PrintLabelModal({ onClose, token }) {
     }
   };
 
-  // <<<--- Вот тут функция для получения QR-кода по имени (только для получения QR-кода) --->
-  const fetchQRCodeByName = async (name) => {
-    if (!name.trim()) {
-      setInventoryNumber(originalInventoryNumber);
-      return;
-    }
-
-    if (!token) {
-      setError('Authentication token is missing');
-      setInventoryNumber(originalInventoryNumber);
-      return;
-    }
-
-    try {
-      const response = await fetch(`/api/items/search-by-name/${encodeURIComponent(name)}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        }
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      // Берём первый результат
-      if (data.length > 0) {
-        setInventoryNumber(data[0].qr_code);
-        setOriginalInventoryNumber(data[0].qr_code);
-      }
-    } catch (err) {
-      setError(err.message);
-      setInventoryNumber(originalInventoryNumber);
-    }
-  };
-
-  // <<<--- Вот тук функция для получения наименования по QR-коду (inventoryNumber) --->
   const fetchItemNameByQR = async (code) => {
     if (!code.trim()) {
       setItemName(originalItemName);
@@ -102,24 +53,15 @@ function PrintLabelModal({ onClose, token }) {
 
     if (!token) {
       setError('Authentication token is missing');
-      setItemName(originalItemName);
       return;
     }
 
     setLoading(true);
-    setError('');
     try {
       const response = await fetch(`/api/items/${code}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        }
+        headers: { 'Authorization': `Bearer ${token}` },
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
-      }
-
+      if (!response.ok) throw new Error('Failed to fetch item by QR');
       const itemData = await response.json();
       setItemName(itemData.name);
       setOriginalItemName(itemData.name);
@@ -131,7 +73,6 @@ function PrintLabelModal({ onClose, token }) {
     }
   };
 
-  // <<<--- Обновим onChange для инвентарного номера (QR-кода) --->
   const handleInventoryNumberChange = (e) => {
     const value = e.target.value;
     setInventoryNumber(value);
@@ -139,15 +80,13 @@ function PrintLabelModal({ onClose, token }) {
     fetchItemNameByQR(value);
   };
 
-  // <<<--- Обновим onChange для наименования --->
   const handleItemNameChange = (e) => {
     const value = e.target.value;
     setItemName(value);
     setOriginalItemName(value);
-    fetchItemNamesByName(value); // <= Вызываем при изменении имени
+    fetchItemNamesByName(value);
   };
 
-  // <<<--- Функция для выбора наименования из списка --->
   const handleItemSelect = (selectedItem) => {
     setItemName(selectedItem.name);
     setOriginalItemName(selectedItem.name);
@@ -175,47 +114,120 @@ function PrintLabelModal({ onClose, token }) {
     setSuccess('Этикетка сгенерирована успешно');
   };
 
-  // useReactToPrint
-  const handlePrint = useReactToPrint({
+  const handleBrowserPrint = useReactToPrint({
     contentRef: componentRef,
     documentTitle: `Label_${inventoryNumber || 'unknown'}`,
     pageStyle: `
       @page {
         margin: 0;
-        size: 210mm 297mm; /* Размер A4 */
+        size: ${template === '75x120' ? '75mm 120mm' : '58mm 40mm'};
+        ${template === '58x40' ? 'size: 40mm 58mm; orientation: landscape;' : ''}
       }
-      body {
-        -webkit-print-color-adjust: exact;
-        color-adjust: exact;
-        margin: 0;
+      @media print {
+        body {
+          -webkit-print-color-adjust: exact;
+          color-adjust: exact;
+          margin: 0;
+          padding: 0;
+        }
+        .print-container {
+          position: static;
+          width: 100%;
+          height: 100%;
+          padding: 0;
+          font-family: 'Arial, sans-serif';
+          font-size: ${template === '75x120' ? '12pt' : '10pt'};
+          line-height: 1.2;
+          border: none;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          text-align: center;
+          box-sizing: border-box;
+          background: white;
+          page-break-inside: avoid;
+        }
+        .print-container svg {
+          max-width: 100%;
+          max-height: ${template === '75x120' ? '40mm' : '25mm'};
+          width: auto;
+          height: auto;
+        }
+      }
+      @media print {
+        * {
+          -webkit-print-color-adjust: exact !important;
+          color-adjust: exact !important;
+        }
+        .print-container {
+          margin: 0;
+          padding: 0;
+          font-size: ${template === '75x120' ? '12pt' : '10pt'};
+          line-height: 1.2;
+        }
+        .print-container svg {
+          max-width: 100%;
+          max-height: ${template === '75x120' ? '40mm' : '25mm'};
+          width: auto;
+          height: auto;
+        }
+        @page {
+          margin: 0;
+        }
+        body {
+          margin: 0;
+          padding: 0;
+        }
       }
       .print-container {
-        position: absolute;
-        top: 10mm; /* Отступ сверху */
-        left: 10mm; /* Отступ слева */
-        ${template === '75x120' ? 'width: 75mm; height: 120mm;' : 'width: 58mm; height: 40mm;'}
-        padding: ${template === '75x120' ? '5mm' : '2mm'};
+        width: ${template === '75x120' ? '75mm' : '58mm'};
+        height: ${template === '75x120' ? '120mm' : '40mm'};
+        padding: ${template === '75x120' ? '5mm' : '1.5mm'};
         font-family: 'Arial, sans-serif';
-        font-size: ${template === '75x120' ? '10pt' : '12pt'}; /* <<<--- Вот тук увеличим шрифт для 58x40 ---> */
+        font-size: ${template === '75x120' ? '12pt' : '10pt'};
         line-height: 1.2;
-        border: 1px solid black;
-        display: flex;
+        border: 1px solid #ccc;
+        display: inline-flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
         text-align: center;
-        box-sizing: border-box;
+        boxSizing: border-box;
+        background: white;
       }
-    `
+      .print-container svg {
+        max-width: 100%;
+        max-height: ${template === '75x120' ? '40mm' : '25mm'};
+        width: auto;
+        height: auto;
+      }
+    `,
   });
 
-  // Функция для получения стилей превью в зависимости от шаблона
   const getPreviewStyle = () => {
     if (template === '75x120') {
       return {
         width: '75mm',
         height: '120mm',
         padding: '5mm',
+        fontFamily: 'Arial, sans-serif',
+        fontSize: '12pt',
+        lineHeight: 1.2,
+        border: '1px solid #ccc',
+        display: 'inline-flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        textAlign: 'center',
+        boxSizing: 'border-box',
+        backgroundColor: 'white',
+      };
+    } else {
+      return {
+        width: '58mm',
+        height: '40mm',
+        padding: '1.5mm',
         fontFamily: 'Arial, sans-serif',
         fontSize: '10pt',
         lineHeight: 1.2,
@@ -226,24 +238,7 @@ function PrintLabelModal({ onClose, token }) {
         justifyContent: 'center',
         textAlign: 'center',
         boxSizing: 'border-box',
-        backgroundColor: 'white'
-      };
-    } else { // 58x40
-      return {
-        width: '58mm',
-        height: '40mm',
-        padding: '2mm',
-        fontFamily: 'Arial, sans-serif',
-        fontSize: '12pt', /* <<<--- Вот тук увеличим шрифт для превью 58x40 ---> */
-        lineHeight: 1.2,
-        border: '1px solid #ccc',
-        display: 'inline-flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        textAlign: 'center',
-        boxSizing: 'border-box',
-        backgroundColor: 'white'
+        backgroundColor: 'white',
       };
     }
   };
@@ -285,20 +280,21 @@ function PrintLabelModal({ onClose, token }) {
                   borderRadius: '4px',
                 }}
               />
-              {/* <<<--- Вот тук выпадающий список ---> */}
               {showDropdown && searchResults.length > 0 && (
-                <div style={{
-                  position: 'absolute',
-                  top: '100%',
-                  left: 0,
-                  right: 0,
-                  backgroundColor: 'white',
-                  border: '1px solid #ccc',
-                  borderRadius: '4px',
-                  zIndex: 10001,
-                  maxHeight: '200px',
-                  overflowY: 'auto',
-                }}>
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    right: 0,
+                    backgroundColor: 'white',
+                    border: '1px solid #ccc',
+                    borderRadius: '4px',
+                    zIndex: 10001,
+                    maxHeight: '200px',
+                    overflowY: 'auto',
+                  }}
+                >
                   {searchResults.map((item, index) => (
                     <div
                       key={index}
@@ -308,7 +304,7 @@ function PrintLabelModal({ onClose, token }) {
                         cursor: 'pointer',
                         borderBottom: index < searchResults.length - 1 ? '1px solid #eee' : 'none',
                       }}
-                      onMouseDown={(e) => e.preventDefault()} // <= Предотвращаем потерю фокуса
+                      onMouseDown={(e) => e.preventDefault()}
                     >
                       {item.name}
                     </div>
@@ -317,7 +313,6 @@ function PrintLabelModal({ onClose, token }) {
               )}
             </div>
 
-            {/* Выбор шаблона */}
             <div style={{ marginTop: '10px' }}>
               <label>Шаблон этикетки:</label>
               <select
@@ -335,49 +330,43 @@ function PrintLabelModal({ onClose, token }) {
             </div>
           </form>
 
-          {/* УСЛОВНЫЙ РЕНДЕР КОНТЕЙНЕРА ПЕЧАТИ */}
           {success && (
             <div style={{ display: 'none' }}>
-              {/* Обертка с классом print-container */}
               <div ref={componentRef} className="print-container">
-                {/* QR код */}
-                <div style={{ marginBottom: template === '75x120' ? '2mm' : '1mm' }}>
+                <div style={{ marginBottom: template === '75x120' ? '3mm' : '1mm' }}>
                   <QRCodeSVG
                     value={inventoryNumber}
-                    size={template === '75x120' ? 150 : 100}
+                    size={template === '75x120' ? 180 : 80}
                     level="H"
                     includeMargin={true}
                   />
                 </div>
-                {/* Имя товара */}
-                <div style={{ fontWeight: 'bold', marginBottom: template === '75x120' ? '5mm' : '2mm' }}>
+                <div style={{ fontWeight: 'bold', marginBottom: template === '75x120' ? '6mm' : '2mm' }}>
                   {itemName}
                 </div>
-                {/* Инвентарный номер */}
-                <div style={{ fontSize: template === '75x120' ? '11pt' : '13pt' }}> {/* <<<--- Вот тук увеличим шрифт для INV ---> */}
+                <div style={{ fontSize: template === '75x120' ? '14pt' : '12pt' }}>
                   INV: {inventoryNumber}
                 </div>
               </div>
             </div>
           )}
 
-          {/* Превью этикетки на экране */}
           {success && (
             <div className="label-preview-container" style={{ marginTop: '20px', textAlign: 'center' }}>
               <h4>Label Preview:</h4>
               <div style={getPreviewStyle()}>
-                <div style={{ marginBottom: template === '75x120' ? '2mm' : '1mm' }}>
+                <div style={{ marginBottom: template === '75x120' ? '3mm' : '1mm' }}>
                   <QRCodeSVG
                     value={inventoryNumber}
-                    size={template === '75x120' ? 64 : 48}
+                    size={template === '75x120' ? 72 : 40}
                     level="H"
                     includeMargin={true}
                   />
                 </div>
-                <div style={{ fontWeight: 'bold', marginBottom: template === '75x120' ? '1mm' : '0.5mm' }}>
+                <div style={{ fontWeight: 'bold', marginBottom: template === '75x120' ? '2mm' : '0.5mm' }}>
                   {itemName}
                 </div>
-                <div style={{ fontSize: template === '75x120' ? '8pt' : '10pt' }}> {/* <<<--- Вот тук увеличим шрифт для INV в превью ---> */}
+                <div style={{ fontSize: template === '75x120' ? '10pt' : '9pt' }}>
                   INV: {inventoryNumber}
                 </div>
               </div>
@@ -386,11 +375,12 @@ function PrintLabelModal({ onClose, token }) {
         </div>
 
         <div className="modal-actions" style={{ marginTop: '20px', justifyContent: 'center' }}>
-          {/* Кнопка печати - показываем только если этикетка сгенерирована */}
           {success && (
-            <button onClick={handlePrint} className="action-btn" style={{ backgroundColor: '#3498db', color: 'white' }}>
-              Печать
-            </button>
+            <>
+              <button onClick={handleBrowserPrint} className="action-btn" style={{ backgroundColor: '#2ecc71', color: 'white' }}>
+                Печать (браузер)
+              </button>
+            </>
           )}
         </div>
 

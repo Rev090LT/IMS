@@ -1,7 +1,17 @@
-import React from 'react';
+import React, { useState } from 'react';
+import CarListModal from './CarListModal';
 
 function Sidebar({ isOpen, onClose, onOpenSQLConsole, onOpenAddUserModal, onOpenAboutDeveloper, onOpenAddManufacturerModal, onOpenAddCategoryModal, onOpenNodeLogConsole, userRole }) { // <= Добавим пропс
+  const [showCarListModal, setShowCarListModal] = useState(false); // <<<--- Новое состояние
   const isAdmin = userRole === 'admin';
+
+  const openCarListModal = () => { // <<<--- Новая функция
+    setShowCarListModal(true);
+  };
+
+  const closeCarListModal = () => { // <<<--- Новая функция
+    setShowCarListModal(false);
+  };
 
   return (
     <>
@@ -85,7 +95,6 @@ function Sidebar({ isOpen, onClose, onOpenSQLConsole, onOpenAddUserModal, onOpen
                 Добавить производителя
               </a>
             </li>
-            {/* <<<--- Вот тут добавим кнопку Node.js Log Console (доступна всем) --->>> */}
             <li style={{ marginBottom: '20px' }}>
               <a
                 href="#!"
@@ -97,6 +106,19 @@ function Sidebar({ isOpen, onClose, onOpenSQLConsole, onOpenAddUserModal, onOpen
                 style={{ color: 'white', textDecoration: 'none', fontSize: '16px', cursor: 'pointer' }}
               >
                 Node.js Log Console
+              </a>
+            </li>
+            <li style={{ marginBottom: '20px' }}>
+              <a
+                href="#!"
+                onClick={(e) => {
+                  e.preventDefault();
+                  openCarListModal(); // <<<--- Новая кнопка
+                  onClose();
+                }}
+                style={{ color: 'white', textDecoration: 'none', fontSize: '16px', cursor: 'pointer' }}
+              >
+                Автомобили в разборе
               </a>
             </li>
             {isAdmin && (
@@ -132,6 +154,9 @@ function Sidebar({ isOpen, onClose, onOpenSQLConsole, onOpenAddUserModal, onOpen
           </ul>
         </div>
       </div>
+      {showCarListModal && (
+        <CarListModal onClose={closeCarListModal} token={localStorage.getItem('token')} />
+      )}
     </>
   );
 }

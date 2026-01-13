@@ -15,7 +15,8 @@ import AddUserModal from './AddUserModal';
 import AboutDeveloper from './AboutDeveloper';
 import AddManufacturerModal from './AddManufacturerModal';
 import AddCategoryModal from './AddCategoryModal';
-import NodeLogConsole from './NodeLogConsole'; // <= Импортируем новый компонент
+import AddCarModal from './AddCarModal';
+import NodeLogConsole from './NodeLogConsole';
 import backgroundImage from './tracktime.jpg'
 
 function Dashboard() {
@@ -27,7 +28,8 @@ function Dashboard() {
   const [aboutDeveloperOpen, setAboutDeveloperOpen] = useState(false);
   const [addManufacturerModalOpen, setAddManufacturerModalOpen] = useState(false);
   const [addCategoryModalOpen, setAddCategoryModalOpen] = useState(false);
-  const [nodeLogConsoleOpen, setNodeLogConsoleOpen] = useState(false); // <= Новое состояние
+  const [addCarModalOpen, setAddCarModalOpen] = useState(false);
+  const [nodeLogConsoleOpen, setNodeLogConsoleOpen] = useState(false);
   const token = localStorage.getItem('token');
 
   useEffect(() => {
@@ -36,7 +38,7 @@ function Dashboard() {
         const payload = JSON.parse(atob(token.split('.')[1]));
         setUserInfo({ id: payload.id, username: payload.username, role: payload.role });
         console.log('User Info from token:', { id: payload.id, username: payload.username, role: payload.role });
-        console.log('Dashboard token:', token); // <= Вот тут
+        console.log('Dashboard token:', token);
       } catch (e) {
         console.error('Invalid token', e);
         window.location.href = '/login';
@@ -93,7 +95,14 @@ function Dashboard() {
     setAddCategoryModalOpen(false);
   };
 
-  // <<<--- Функции для Node.js Log Console --->>>
+  const openAddCarModal = () => {
+    setAddCarModalOpen(true);
+  };
+
+  const closeAddCarModal = () => {
+    setAddCarModalOpen(false);
+  };
+
   const openNodeLogConsole = () => {
     setNodeLogConsoleOpen(true);
   };
@@ -118,10 +127,10 @@ function Dashboard() {
       backgroundSize: 'cover',
       backgroundPosition: 'center',
       minHeight: '100vh',
-      margin: 0, // <= Вот тут
-      padding: 0, // <= Вот тук
-      position: 'relative', // <= Вот тут
-      zIndex: 0, // <= Вот тук
+      margin: 0,
+      padding: 0,
+      position: 'relative',
+      zIndex: 0,
     }}>
       <div className="dashboard-layout">
         <button
@@ -150,7 +159,7 @@ function Dashboard() {
           onOpenAboutDeveloper={openAboutDeveloper}
           onOpenAddManufacturerModal={openAddManufacturerModal}
           onOpenAddCategoryModal={openAddCategoryModal}
-          onOpenNodeLogConsole={openNodeLogConsole} // <= Передаём функцию
+          onOpenNodeLogConsole={openNodeLogConsole}
           userRole={userInfo?.role}
         />
 
@@ -246,7 +255,7 @@ function Dashboard() {
 
           <div className="dashboard-section-group">
             <h3 className="dashboard-subsection-title">Управление</h3>
-            <div className="dashboard-buttons-grid dashboard-grid-two">
+            <div className="dashboard-buttons-grid dashboard-grid-three"> {/* <<<--- Сделали три колонки --- */}
               <div className="dashboard-button-container">
                 <button
                   onClick={() => setActiveModal('addLocation')}
@@ -267,6 +276,22 @@ function Dashboard() {
                   <div className="dashboard-button-content">
                     <div className="dashboard-button-icon">➕</div>
                     <h3 className="dashboard-button-label">Добавить позицию</h3>
+                  </div>
+                </button>
+              </div>
+
+              <div className="dashboard-button-container">
+                <button
+                  onClick={openAddCarModal} // <<<--- Новая кнопка
+                  className="dashboard-button dashboard-button-add-car"
+                  style={{
+                    backgroundColor: '#9b59b6', // <<<--- Цвет кнопки
+                    color: 'white',
+                  }}
+                >
+                  <div className="dashboard-button-content">
+                    <div className="dashboard-button-icon">🚗</div>
+                    <h3 className="dashboard-button-label">Добавить автомобиль</h3>
                   </div>
                 </button>
               </div>
@@ -291,14 +316,13 @@ function Dashboard() {
         {activeModal === 'add' && <AddItemModal onClose={() => setActiveModal(null)} token={token} onItemAdded={handleItemAdded} />}
         {activeModal === 'addLocation' && <AddLocationModal onClose={() => setActiveModal(null)} token={token} />}
         {activeModal === 'history' && <MovementHistoryModal onClose={() => setActiveModal(null)} token={token} />}
-        {/* <<<--- Вот тут передаём token в PrintLabelModal --->>> */}
         {activeModal === 'printLabel' && <PrintLabelModal onClose={() => setActiveModal(null)} token={token} />}
+        {addCarModalOpen && <AddCarModal onClose={closeAddCarModal} token={token} />} {/* <<<--- Новое модальное окно --- */}
         {sqlConsoleOpen && <SQLConsole onClose={closeSQLConsole} />}
         {addUserModalOpen && <AddUserModal onClose={closeAddUserModal} />}
         {aboutDeveloperOpen && <AboutDeveloper onClose={closeAboutDeveloper} />}
         {addManufacturerModalOpen && <AddManufacturerModal onClose={closeAddManufacturerModal} />}
         {addCategoryModalOpen && <AddCategoryModal onClose={closeAddCategoryModal} />}
-        {/* <<<--- Вот тут добавим Node.js Log Console --->>> */}
         {nodeLogConsoleOpen && <NodeLogConsole onClose={closeNodeLogConsole} />}
       </div>
     </div>
