@@ -95,7 +95,7 @@ CREATE TABLE manufacturers (
     contact_info TEXT, -- Контакты, если нужно
     created_at TIMESTAMP DEFAULT NOW()
 );
-
+--автомобили в разборе
 CREATE TABLE cars (
   id SERIAL PRIMARY KEY,
   brand VARCHAR(255) NOT NULL,
@@ -105,7 +105,7 @@ CREATE TABLE cars (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
-
+--проданные запчасти
 CREATE TABLE sold_parts (
   id SERIAL PRIMARY KEY,
   item_id INTEGER REFERENCES items(id) ON DELETE CASCADE,
@@ -119,6 +119,16 @@ CREATE TABLE sold_parts (
   buyer_info TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+--контрагенты
+CREATE TABLE counterparties (
+  id SERIAL PRIMARY KEY,
+  fio VARCHAR(255) NOT NULL,
+  phone VARCHAR(20),
+  email VARCHAR(255),
+  address TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 
 ALTER TABLE items ADD COLUMN category_id INTEGER REFERENCES categories(id);
 ALTER TABLE items ADD COLUMN manufacturer_id INTEGER REFERENCES manufacturers(id);
@@ -126,4 +136,11 @@ ALTER TABLE items ADD COLUMN part_number VARCHAR(255);
 ALTER TABLE items ADD COLUMN car_model VARCHAR(255);
 ALTER TABLE items ADD COLUMN vin_number VARCHAR(255);
 ALTER TABLE cars ADD COLUMN year INTEGER;
+
+ALTER TABLE counterparties ADD COLUMN type VARCHAR(10) DEFAULT 'physical'; -- physical или legal
+ALTER TABLE counterparties ADD COLUMN inn VARCHAR(12); -- Для юрлиц
+ALTER TABLE counterparties ADD COLUMN kpp VARCHAR(9); -- Для юрлиц
+ALTER TABLE counterparties ADD COLUMN ogrn VARCHAR(13); -- Для юрлиц
+ALTER TABLE counterparties ADD COLUMN company_name VARCHAR(255); -- Для юрлиц
+ALTER TABLE counterparties ADD COLUMN legal_address TEXT; -- Для юрлиц
 TRUNCATE TABLE имя_таблицы; --удалить все из таблицы

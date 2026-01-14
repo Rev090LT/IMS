@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { useReactToPrint } from 'react-to-print';
 
 function PrintReceiptModal({ receipt, onClose, token }) {
@@ -6,11 +6,11 @@ function PrintReceiptModal({ receipt, onClose, token }) {
 
   const handlePrint = useReactToPrint({
     contentRef: componentRef,
-    documentTitle: `Receipt_${receipt.item.qr_code}`,
+    documentTitle: `Receipt_${receipt.items ? receipt.items[0]?.item?.qr_code : receipt.item?.qr_code}`,
     pageStyle: `
       @page {
         margin: 0;
-        size: 80mm auto; /* <<<--- Ширина чека */
+        size: auto;
       }
       @media print {
         body {
@@ -30,7 +30,7 @@ function PrintReceiptModal({ receipt, onClose, token }) {
         }
       }
       .receipt-container {
-        width: 80mm;
+        width: 100%;
         padding: 10px;
         font-family: 'Courier New', monospace;
         font-size: 12pt;
@@ -41,6 +41,90 @@ function PrintReceiptModal({ receipt, onClose, token }) {
       }
     `,
   });
+
+  const [checkNumber] = useState(() => {
+    const stored = localStorage.getItem('lastCheckNumber');
+    const number = stored ? parseInt(stored) + 1 : 1;
+    localStorage.setItem('lastCheckNumber', number.toString());
+    return number;
+  });
+
+  const formatDate = (dateStr) => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('ru-RU', {
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric'
+    });
+  };
+
+  const numberToWords = (num) => {
+    const units = ['', 'один', 'два', 'три', 'четыре', 'пять', 'шесть', 'семь', 'восемь', 'девять'];
+    const teens = ['десять', 'одиннадцать', 'двенадцать', 'тринадцать', 'четырнадцать', 'пятнадцать', 'шестнадцать', 'семнадцать', 'восемнадцать', 'девятнадцать'];
+    const tens = ['', '', 'двадцать', 'тридцать', 'сорок', 'пятьдесят', 'шестьдесят', 'семьдесят', 'восемьдесят', 'девяносто'];
+    const hundreds = ['', 'сто', 'двести', 'триста', 'четыреста', 'пятьсот', 'шестьсот', 'семьсот', 'восемьсот', 'девятьсот'];
+
+    if (num === 0) return 'ноль';
+
+    let result = '';
+
+    const billions = Math.floor(num / 1000000000);
+    const millions = Math.floor((num % 1000000000) / 1000000);
+    const thousands = Math.floor((num % 1000000) / 1000);
+    const ones = num % 1000;
+
+    if (billions > 0) {
+      result += numberToWords(billions) + ' миллиард' + (billions !== 1 ? 'ов' : '') + ' ';
+    }
+
+    if (millions > 0) {
+      result += numberToWords(millions) + ' миллион' + (millions !== 1 ? 'ов' : '') + ' ';
+    }
+
+    if (thousands > 0) {
+      const t = thousands;
+      if (t >= 100) {
+        result += hundreds[Math.floor(t / 100)] + ' ';
+      }
+      if (t % 100 >= 20) {
+        result += tens[Math.floor((t % 100) / 10)] + ' ';
+      } else if (t % 100 >= 10) {
+        result += teens[t % 10] + ' ';
+      }
+      if (t % 10 > 0 && t % 100 < 10) {
+        result += units[t % 10] + ' ';
+      }
+      const thousandsSuffix = (thousands % 10 === 1 && thousands % 100 !== 11) ? 'а' : 
+                             (thousands % 10 >= 2 && thousands % 10 <= 4 && (thousands % 100 < 10 || thousands % 100 >= 20)) ? 'и' : '';
+      result += 'тысяч' + thousandsSuffix + ' ';
+    }
+
+    if (ones > 0) {
+      if (ones >= 100) {
+        result += hundreds[Math.floor(ones / 100)] + ' ';
+      }
+      if (ones % 100 >= 20) {
+        result += tens[Math.floor((ones % 100) / 10)] + ' ';
+      } else if (ones % 100 >= 10) {
+        result += teens[ones % 10] + ' ';
+      }
+      if (ones % 10 > 0 && ones % 100 < 10) {
+        result += units[ones % 10] + ' ';
+      }
+    }
+
+    return result.trim();
+  };
+
+  const totalInWords = () => {
+    const rubles = Math.floor(receipt.totalAmount);
+    const kopeks = Math.round((receipt.totalAmount - rubles) * 100);
+
+    const rublesWords = numberToWords(rubles);
+    const kopeksWords = numberToWords(kopeks);
+
+    return `${rublesWords} рубль${rubles === 1 ? '' : (rubles >= 2 && rubles <= 4 ? 'я' : 'ей')} ${kopeks} копеек`;
+  };
 
   return (
     <div className="modal-overlay" style={{
@@ -83,18 +167,67 @@ function PrintReceiptModal({ receipt, onClose, token }) {
         </div>
 
         <div ref={componentRef} className="receipt-container">
-          <h3>Чек о продаже</h3>
+          <h3>Товарный чек №{checkNumber} от {formatDate(receipt.sale_date)}</h3>
           <hr />
-          <p><strong>QR-код:</strong> {receipt.item.qr_code}</p>
-          <p><strong>Наименование:</strong> {receipt.item.name}</p>
-          <p><strong>Part Number:</strong> {receipt.item.part_number}</p>
-          <p><strong>Модель машины:</strong> {receipt.item.car_model}</p>
-          <p><strong>VIN:</strong> {receipt.item.vin_number}</p>
+          <p><strong>Поставщик:</strong> {receipt.seller || 'ИП Иванов И.И.'}</p>
+          {receipt.counterparty?.type === 'legal' ? (
+            <>
+              <p><strong>Покупатель:</strong> {receipt.counterparty.company_name}</p>
+              <p><strong>ИНН:</strong> {receipt.counterparty.inn || 'N/A'}</p>
+              <p><strong>КПП:</strong> {receipt.counterparty.kpp || 'N/A'}</p>
+              <p><strong>ОГРН:</strong> {receipt.counterparty.ogrn || 'N/A'}</p>
+              <p><strong>Юридический адрес:</strong> {receipt.counterparty.legal_address || 'N/A'}</p>
+            </>
+          ) : (
+            <p><strong>Покупатель:</strong> {receipt.counterparty ? receipt.counterparty.fio : 'Частное лицо'}</p>
+          )}
           <hr />
-          <p><strong>Цена:</strong> {receipt.price.toFixed(2)} руб</p>
-          <p><strong>Дата продажи:</strong> {new Date(receipt.saleDate).toLocaleString()}</p>
+          <table style={{
+            width: '100%',
+            borderCollapse: 'collapse',
+            fontSize: '10pt',
+          }}>
+            <thead>
+              <tr style={{ backgroundColor: '#f2f2f2' }}>
+                <th style={{ border: '1px solid #ddd', padding: '4px', textAlign: 'left' }}>№</th>
+                <th style={{ border: '1px solid #ddd', padding: '4px', textAlign: 'left' }}>Артикул</th>
+                <th style={{ border: '1px solid #ddd', padding: '4px', textAlign: 'left' }}>Товар</th>
+                <th style={{ border: '1px solid #ddd', padding: '4px', textAlign: 'right' }}>Количество</th>
+                <th style={{ border: '1px solid #ddd', padding: '4px', textAlign: 'right' }}>Цена</th>
+                <th style={{ border: '1px solid #ddd', padding: '4px', textAlign: 'right' }}>Сумма</th>
+              </tr>
+            </thead>
+            <tbody>
+              {receipt.items.map((itemData, index) => (
+                <tr key={index}>
+                  <td style={{ border: '1px solid #ddd', padding: '4px' }}>{index + 1}</td>
+                  <td style={{ border: '1px solid #ddd', padding: '4px' }}>{itemData.item.qr_code || 'N/A'}</td>
+                  <td style={{ border: '1px solid #ddd', padding: '4px' }}>{itemData.item.name || 'N/A'}</td>
+                  <td style={{ border: '1px solid #ddd', padding: '4px', textAlign: 'right' }}>1 шт</td>
+                  <td style={{ border: '1px solid #ddd', padding: '4px', textAlign: 'right' }}>{itemData.selling_price.toFixed(2)} руб</td>
+                  <td style={{ border: '1px solid #ddd', padding: '4px', textAlign: 'right' }}>{itemData.selling_price.toFixed(2)} руб</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colSpan="5" style={{ border: '1px solid #ddd', padding: '4px', textAlign: 'right' }}><strong>Итого:</strong></td>
+                <td style={{ border: '1px solid #ddd', padding: '4px', textAlign: 'right' }}><strong>{receipt.totalAmount.toFixed(2)} руб</strong></td>
+              </tr>
+            </tfoot>
+          </table>
           <hr />
-          <p>Спасибо за покупку!</p>
+          <p>Всего наименований {receipt.items.length}, на сумму {receipt.totalAmount.toFixed(2)} руб.</p>
+          <p>{totalInWords()}</p>
+          <hr />
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '20px' }}>
+            <div style={{ textAlign: 'center' }}>
+              <p>Отпустил _________________</p>
+            </div>
+            <div style={{ textAlign: 'center' }}>
+              <p>Получил _________________</p>
+            </div>
+          </div>
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', marginTop: '20px' }}>

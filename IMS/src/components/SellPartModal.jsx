@@ -3,22 +3,34 @@ import PrintReceiptModal from './PrintReceiptModal';
 
 function SellPartModal({ onClose, token }) {
   const [items, setItems] = useState([]);
-  const [selectedItem, setSelectedItem] = useState(null);
-  const [price, setPrice] = useState('');
-  const [buyerName, setBuyerName] = useState('');
-  const [buyerInfo, setBuyerInfo] = useState('');
-  const [buyerPhone, setBuyerPhone] = useState('');
+  const [selectedItems, setSelectedItems] = useState([]);
+  const [counterparties, setCounterparties] = useState([]);
+  const [selectedCounterparty, setSelectedCounterparty] = useState('');
+  const [newCounterparty, setNewCounterparty] = useState({ 
+    type: 'physical', // <<<--- Тип контрагента
+    fio: '', 
+    phone: '', 
+    email: '', 
+    address: '',
+    inn: '', // <<<--- Для юрлиц
+    kpp: '', // <<<--- Для юрлиц
+    ogrn: '', // <<<--- Для юрлиц
+    company_name: '', // <<<--- Для юрлиц
+    legal_address: '' // <<<--- Для юрлиц
+  });
   const [saleDate, setSaleDate] = useState(new Date().toISOString().split('T')[0]);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(true);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
   const [receiptData, setReceiptData] = useState(null);
+  const [seller, setSeller] = useState('ИП Иванов И.И.');
 
   useEffect(() => {
-    const fetchItems = async () => {
+    const fetchData = async () => {
       try {
-        const response = await fetch('/api/items', {
+        // <<<--- Загрузим товары --->
+        let response = await fetch('/api/items', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
 
@@ -26,9 +38,21 @@ function SellPartModal({ onClose, token }) {
           throw new Error('Failed to fetch items');
         }
 
-        const data = await response.json();
-        const availableItems = data.filter(item => item.status === 'available' || item.status === 'warehouse');
+        let data = await response.json();
+        let availableItems = data.filter(item => item.status === 'available' || item.status === 'warehouse');
         setItems(availableItems);
+
+        // <<<--- Загрузим контрагентов --->
+        response = await fetch('/api/items/counterparties', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch counterparties');
+        }
+
+        data = await response.json();
+        setCounterparties(data);
       } catch (err) {
         setError(err.message);
       } finally {
@@ -36,27 +60,117 @@ function SellPartModal({ onClose, token }) {
       }
     };
 
-    fetchItems();
+    fetchData();
   }, [token]);
 
-  const handleItemSelect = (e) => {
-    const itemId = e.target.value;
-    if (itemId) {
-      const item = items.find(i => i.id === parseInt(itemId));
-      setSelectedItem(item);
-    } else {
-      setSelectedItem(null);
+  // <<<--- Добавить товар в список --->
+  const handleAddItem = (itemId) => {
+    const item = items.find(i => i.id === parseInt(itemId));
+    if (item && !selectedItems.some(si => si.id === item.id)) {
+      setSelectedItems(prev => [...prev, { ...item, selling_price: 0 }]);
     }
   };
 
-  const handleSell = async () => {
-    if (!selectedItem) {
-      setError('Выберите запчасть');
+  // <<<--- Удалить товар из списка --->
+  const handleRemoveItem = (itemId) => {
+    setSelectedItems(prev => prev.filter(item => item.id !== itemId));
+  };
+
+  // <<<--- Изменить цену --->
+  const handlePriceChange = (itemId, newPrice) => {
+    setSelectedItems(prev =>
+      prev.map(item => item.id === itemId ? { ...item, selling_price: parseFloat(newPrice) || 0 } : item)
+    );
+  };
+
+  // <<<--- Обновить данные нового контрагента --->
+  const handleNewCounterpartyChange = (field, value) => {
+    setNewCounterparty(prev => ({ ...prev, [field]: value }));
+  };
+
+  // <<<--- Добавить нового контрагента --->
+  const handleAddNewCounterparty = async () => {
+    if (newCounterparty.type === 'legal' && (!newCounterparty.company_name || !newCounterparty.inn || !newCounterparty.legal_address)) {
+      setError('Company name, INN, and legal address are required for legal entities');
       return;
     }
 
-    if (!price || parseFloat(price) <= 0) {
-      setError('Введите корректную цену');
+    if (newCounterparty.type === 'physical' && !newCounterparty.fio) {
+      setError('FIO is required for physical persons');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/items/counterparties', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(newCounterparty),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to add counterparty');
+      }
+
+      // <<<--- Обновим список контрагентов --->
+      setCounterparties(prev => [data, ...prev]);
+      setSelectedCounterparty(data.id.toString());
+
+      // <<<--- Очистим форму --->
+      setNewCounterparty({ 
+        type: 'physical', 
+        fio: '', 
+        phone: '', 
+        email: '', 
+        address: '',
+        inn: '',
+        kpp: '',
+        ogrn: '',
+        company_name: '',
+        legal_address: ''
+      });
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  // <<<--- Подсчитать итого --->
+  const handleCalculateTotal = () => {
+    if (selectedItems.length === 0) {
+      setError('Добавьте хотя бы один товар');
+      return;
+    }
+
+    const allPricesFilled = selectedItems.every(item => item.selling_price > 0);
+    if (!allPricesFilled) {
+      setError('Введите цену для всех товаров');
+      return;
+    }
+
+    const totalAmount = selectedItems.reduce((sum, item) => sum + item.selling_price, 0);
+    
+    const receipt = {
+      items: selectedItems.map(item => ({
+        item: item,
+        selling_price: item.selling_price
+      })),
+      totalAmount: totalAmount,
+      sale_date: saleDate,
+      seller: seller,
+      counterparty: counterparties.find(cp => cp.id === parseInt(selectedCounterparty)) || null
+    };
+
+    setReceiptData(receipt);
+    setSuccess('Итого: ' + totalAmount.toFixed(2) + ' руб');
+  };
+
+  const handleSell = async () => {
+    if (!receiptData) {
+      setError('Подсчитайте итого');
       return;
     }
 
@@ -68,33 +182,22 @@ function SellPartModal({ onClose, token }) {
           'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
-          item_id: selectedItem.id,
-          selling_price: parseFloat(price),
-          buyer_name: buyerName,
-          buyer_info: buyerInfo,
-          buyer_phone: buyerPhone
+          items: selectedItems.map(item => ({
+            item_id: item.id,
+            selling_price: item.selling_price
+          })),
+          total_amount: receiptData.totalAmount,
+          counterparty_id: selectedCounterparty ? parseInt(selectedCounterparty) : null
         }),
       });
 
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error || 'Failed to sell item');
+        throw new Error(result.error || 'Failed to sell items');
       }
 
-      setSuccess('Запчасть успешно продана!');
-
-      // <<<--- Подготовим данные для чека --->
-      const receipt = {
-        item: selectedItem,
-        selling_price: parseFloat(price),
-        sale_date: saleDate,
-        buyer_name: buyerName,
-        buyer_info: buyerInfo,
-        buyer_phone: buyerPhone
-      };
-
-      setReceiptData(receipt);
+      setSuccess('Запчасти успешно проданы!');
     } catch (err) {
       setError(err.message);
     }
@@ -122,7 +225,7 @@ function SellPartModal({ onClose, token }) {
       zIndex: 10000,
     }}>
       <div className="modal-content" style={{
-        width: '800px',
+        width: '1200px',
         backgroundColor: 'white',
         borderRadius: '8px',
         padding: '20px',
@@ -134,7 +237,7 @@ function SellPartModal({ onClose, token }) {
           alignItems: 'center',
           marginBottom: '20px',
         }}>
-          <h3>Продажа запчасти</h3>
+          <h3>Продажа запчастей</h3>
           <button
             onClick={onClose}
             style={{
@@ -179,8 +282,6 @@ function SellPartModal({ onClose, token }) {
             <div style={{ marginBottom: '15px' }}>
               <label>Выберите запчасть:</label>
               <select
-                value={selectedItem ? selectedItem.id : ''}
-                onChange={handleItemSelect}
                 style={{
                   width: '100%',
                   padding: '8px',
@@ -189,42 +290,74 @@ function SellPartModal({ onClose, token }) {
                 }}
               >
                 <option value="">Выберите запчасть</option>
-                {items.map(item => (
+                {items.filter(item => !selectedItems.some(si => si.id === item.id)).map(item => (
                   <option key={item.id} value={item.id}>
                     {item.name} (Кол-во: {item.quantity}, VIN: {item.vin_number})
                   </option>
                 ))}
               </select>
+              <button
+                onClick={() => {
+                  const selectElement = document.querySelector('select');
+                  if (selectElement.value) {
+                    handleAddItem(parseInt(selectElement.value));
+                    selectElement.value = '';
+                  }
+                }}
+                style={{
+                  marginTop: '5px',
+                  padding: '5px 10px',
+                  backgroundColor: '#3498db',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                }}
+              >
+                Добавить
+              </button>
             </div>
 
-            {selectedItem && (
-              <div style={{ marginBottom: '15px', padding: '10px', backgroundColor: '#f9f9f9', borderRadius: '4px' }}>
-                <h4>Информация о запчасти:</h4>
-                <p><strong>QR-код:</strong> {selectedItem.qr_code}</p>
-                <p><strong>Наименование:</strong> {selectedItem.name}</p>
-                <p><strong>Описание:</strong> {selectedItem.description}</p>
-                <p><strong>Part Number:</strong> {selectedItem.part_number}</p>
-                <p><strong>Модель машины:</strong> {selectedItem.car_model}</p>
-                <p><strong>VIN:</strong> {selectedItem.vin_number}</p>
-              </div>
-            )}
-
             <div style={{ marginBottom: '15px' }}>
-              <label>Цена (руб):</label>
-              <input
-                type="number"
-                value={price}
-                onChange={(e) => setPrice(e.target.value)}
-                step="0.01"
-                min="0"
-                placeholder="Введите цену"
-                style={{
-                  width: '100%',
-                  padding: '8px',
-                  border: '1px solid #ccc',
-                  borderRadius: '4px',
-                }}
-              />
+              <h4>Выбранные запчасти:</h4>
+              <ul style={{ maxHeight: '200px', overflowY: 'auto', border: '1px solid #ccc', borderRadius: '4px', padding: '10px' }}>
+                {selectedItems.map(item => (
+                  <li key={item.id} style={{ marginBottom: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <p><strong>{item.name}</strong> (VIN: {item.vin_number})</p>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                      <span>Цена:</span>
+                      <input
+                        type="number"
+                        value={item.selling_price}
+                        onChange={(e) => handlePriceChange(item.id, e.target.value)}
+                        min="0.01"
+                        step="0.01"
+                        style={{
+                          width: '80px',
+                          padding: '2px',
+                          border: '1px solid #ccc',
+                          borderRadius: '4px',
+                        }}
+                      />
+                      <button
+                        onClick={() => handleRemoveItem(item.id)}
+                        style={{
+                          padding: '2px 5px',
+                          backgroundColor: '#e74c3c',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Удалить
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
             </div>
 
             <div style={{ marginBottom: '15px' }}>
@@ -241,54 +374,241 @@ function SellPartModal({ onClose, token }) {
                 }}
               />
             </div>
+
+            <button
+              onClick={handleCalculateTotal}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: '#f39c12',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+              }}
+            >
+              Подсчитать итого
+            </button>
           </div>
           <div style={{ flex: 1 }}>
             <div style={{ marginBottom: '15px' }}>
-              <label>ФИО контрагента:</label>
-              <input
-                type="text"
-                value={buyerName}
-                onChange={(e) => setBuyerName(e.target.value)}
-                placeholder="Введите ФИО контрагента"
+              <label>Выберите контрагента:</label>
+              <select
+                value={selectedCounterparty}
+                onChange={(e) => setSelectedCounterparty(e.target.value)}
                 style={{
                   width: '100%',
                   padding: '8px',
                   border: '1px solid #ccc',
                   borderRadius: '4px',
                 }}
-              />
+              >
+                <option value="">Новый контрагент</option>
+                {counterparties.map(cp => (
+                  <option key={cp.id} value={cp.id}>
+                    {cp.type === 'legal' ? cp.company_name : cp.fio} ({cp.phone || 'N/A'})
+                  </option>
+                ))}
+              </select>
             </div>
 
-            <div style={{ marginBottom: '15px' }}>
-              <label>Телефон контрагента:</label>
-              <input
-                type="tel"
-                value={buyerPhone}
-                onChange={(e) => setBuyerPhone(e.target.value)}
-                placeholder="Введите телефон контрагента"
-                style={{
-                  width: '100%',
-                  padding: '8px',
-                  border: '1px solid #ccc',
-                  borderRadius: '4px',
-                }}
-              />
-            </div>
+            {selectedCounterparty === '' && (
+              <div style={{ marginBottom: '15px' }}>
+                <h4>Новый контрагент:</h4>
+                <div style={{ marginBottom: '10px' }}>
+                  <label>Тип:</label>
+                  <select
+                    value={newCounterparty.type}
+                    onChange={(e) => handleNewCounterpartyChange('type', e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px',
+                      border: '1px solid #ccc',
+                      borderRadius: '4px',
+                    }}
+                  >
+                    <option value="physical">Физическое лицо</option>
+                    <option value="legal">Юридическое лицо</option>
+                  </select>
+                </div>
 
-            <div style={{ marginBottom: '15px' }}>
-              <label>Информация о контрагенте:</label>
-              <textarea
-                value={buyerInfo}
-                onChange={(e) => setBuyerInfo(e.target.value)}
-                placeholder="Введите информацию о контрагенте"
-                style={{
-                  width: '100%',
-                  padding: '8px',
-                  border: '1px solid #ccc',
-                  borderRadius: '4px',
-                }}
-              />
-            </div>
+                {newCounterparty.type === 'physical' && (
+                  <div>
+                    <div style={{ marginBottom: '10px' }}>
+                      <label>ФИО:</label>
+                      <input
+                        type="text"
+                        value={newCounterparty.fio}
+                        onChange={(e) => handleNewCounterpartyChange('fio', e.target.value)}
+                        placeholder="Введите ФИО"
+                        style={{
+                          width: '100%',
+                          padding: '8px',
+                          border: '1px solid #ccc',
+                          borderRadius: '4px',
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {newCounterparty.type === 'legal' && (
+                  <div>
+                    <div style={{ marginBottom: '10px' }}>
+                      <label>Название компании:</label>
+                      <input
+                        type="text"
+                        value={newCounterparty.company_name}
+                        onChange={(e) => handleNewCounterpartyChange('company_name', e.target.value)}
+                        placeholder="Введите название компании"
+                        style={{
+                          width: '100%',
+                          padding: '8px',
+                          border: '1px solid #ccc',
+                          borderRadius: '4px',
+                        }}
+                      />
+                    </div>
+                    <div style={{ marginBottom: '10px' }}>
+                      <label>ИНН:</label>
+                      <input
+                        type="text"
+                        value={newCounterparty.inn}
+                        onChange={(e) => handleNewCounterpartyChange('inn', e.target.value)}
+                        placeholder="Введите ИНН"
+                        style={{
+                          width: '100%',
+                          padding: '8px',
+                          border: '1px solid #ccc',
+                          borderRadius: '4px',
+                        }}
+                      />
+                    </div>
+                    <div style={{ marginBottom: '10px' }}>
+                      <label>КПП:</label>
+                      <input
+                        type="text"
+                        value={newCounterparty.kpp}
+                        onChange={(e) => handleNewCounterpartyChange('kpp', e.target.value)}
+                        placeholder="Введите КПП"
+                        style={{
+                          width: '100%',
+                          padding: '8px',
+                          border: '1px solid #ccc',
+                          borderRadius: '4px',
+                        }}
+                      />
+                    </div>
+                    <div style={{ marginBottom: '10px' }}>
+                      <label>ОГРН:</label>
+                      <input
+                        type="text"
+                        value={newCounterparty.ogrn}
+                        onChange={(e) => handleNewCounterpartyChange('ogrn', e.target.value)}
+                        placeholder="Введите ОГРН"
+                        style={{
+                          width: '100%',
+                          padding: '8px',
+                          border: '1px solid #ccc',
+                          borderRadius: '4px',
+                        }}
+                      />
+                    </div>
+                    <div style={{ marginBottom: '10px' }}>
+                      <label>Юридический адрес:</label>
+                      <textarea
+                        value={newCounterparty.legal_address}
+                        onChange={(e) => handleNewCounterpartyChange('legal_address', e.target.value)}
+                        placeholder="Введите юридический адрес"
+                        style={{
+                          width: '100%',
+                          padding: '8px',
+                          border: '1px solid #ccc',
+                          borderRadius: '4px',
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ marginBottom: '10px' }}>
+                  <label>Телефон:</label>
+                  <input
+                    type="tel"
+                    value={newCounterparty.phone}
+                    onChange={(e) => handleNewCounterpartyChange('phone', e.target.value)}
+                    placeholder="Введите телефон"
+                    style={{
+                      width: '100%',
+                      padding: '8px',
+                      border: '1px solid #ccc',
+                      borderRadius: '4px',
+                    }}
+                  />
+                </div>
+                <div style={{ marginBottom: '10px' }}>
+                  <label>Email:</label>
+                  <input
+                    type="email"
+                    value={newCounterparty.email}
+                    onChange={(e) => handleNewCounterpartyChange('email', e.target.value)}
+                    placeholder="Введите email"
+                    style={{
+                      width: '100%',
+                      padding: '8px',
+                      border: '1px solid #ccc',
+                      borderRadius: '4px',
+                    }}
+                  />
+                </div>
+                <div style={{ marginBottom: '10px' }}>
+                  <label>Адрес:</label>
+                  <textarea
+                    value={newCounterparty.address}
+                    onChange={(e) => handleNewCounterpartyChange('address', e.target.value)}
+                    placeholder="Введите адрес"
+                    style={{
+                      width: '100%',
+                      padding: '8px',
+                      border: '1px solid #ccc',
+                      borderRadius: '4px',
+                    }}
+                  />
+                </div>
+                <button
+                  onClick={handleAddNewCounterparty}
+                  style={{
+                    padding: '8px 16px',
+                    backgroundColor: '#3498db',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Добавить контрагента
+                </button>
+              </div>
+            )}
+
+            {selectedCounterparty && (
+              <div style={{ marginBottom: '15px' }}>
+                <h4>Выбранный контрагент:</h4>
+                {counterparties.find(cp => cp.id === parseInt(selectedCounterparty))?.type === 'legal' ? (
+                  <>
+                    <p><strong>Название компании:</strong> {counterparties.find(cp => cp.id === parseInt(selectedCounterparty))?.company_name}</p>
+                    <p><strong>ИНН:</strong> {counterparties.find(cp => cp.id === parseInt(selectedCounterparty))?.inn || 'N/A'}</p>
+                    <p><strong>КПП:</strong> {counterparties.find(cp => cp.id === parseInt(selectedCounterparty))?.kpp || 'N/A'}</p>
+                    <p><strong>ОГРН:</strong> {counterparties.find(cp => cp.id === parseInt(selectedCounterparty))?.ogrn || 'N/A'}</p>
+                    <p><strong>Юридический адрес:</strong> {counterparties.find(cp => cp.id === parseInt(selectedCounterparty))?.legal_address || 'N/A'}</p>
+                  </>
+                ) : (
+                  <p><strong>ФИО:</strong> {counterparties.find(cp => cp.id === parseInt(selectedCounterparty))?.fio}</p>
+                )}
+                <p><strong>Телефон:</strong> {counterparties.find(cp => cp.id === parseInt(selectedCounterparty))?.phone || 'N/A'}</p>
+                <p><strong>Email:</strong> {counterparties.find(cp => cp.id === parseInt(selectedCounterparty))?.email || 'N/A'}</p>
+                <p><strong>Адрес:</strong> {counterparties.find(cp => cp.id === parseInt(selectedCounterparty))?.address || 'N/A'}</p>
+              </div>
+            )}
           </div>
         </div>
 

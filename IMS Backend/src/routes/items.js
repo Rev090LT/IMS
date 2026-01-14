@@ -10,7 +10,7 @@ const router = express.Router();
 // В GET /api/items/cars
 router.get('/cars', authenticateToken, async (req, res) => {
   try {
-    // <<<--- Явно конвертируй дату в строку формата YYYY-MM-DD --->
+    // <<<--- Явно конвертий дату в строку формата YYYY-MM-DD --->
     const result = await pool.query(`
       SELECT id, brand, model, vin, year, TO_CHAR(arrival_date, 'YYYY-MM-DD') AS arrival_date
       FROM cars
@@ -81,7 +81,119 @@ router.put('/cars/:id', authenticateToken, async (req, res) => {
     }
   }
 });
+
+// <<<--- Маршрут для получения списка контрагентов --->
+// <<<--- ДОБАВИМ маршрут ПЕРЕД /:qr_code --->
+// <<<--- Маршрут для добавления контрагента --->
+// <<<--- Обновим маршрут для добавления контрагента --->
+router.post('/counterparties', authenticateToken, async (req, res) => {
+  const { type, fio, phone, email, address, inn, kpp, ogrn, company_name, legal_address } = req.body;
+
+  if (type === 'legal' && (!company_name || !inn || !legal_address)) {
+    return res.status(400).json({ error: 'Company name, INN, and legal address are required for legal entities' });
+  }
+
+  if (type === 'physical' && !fio) {
+    return res.status(400).json({ error: 'FIO is required for physical persons' });
+  }
+
+  try {
+    const result = await pool.query(
+      `INSERT INTO counterparties (type, fio, phone, email, address, inn, kpp, ogrn, company_name, legal_address) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+      [
+        type, 
+        type === 'physical' ? fio : null, // <<<--- Вот тут
+        phone || null, 
+        email || null, 
+        address || null, 
+        inn || null, 
+        kpp || null, 
+        ogrn || null, 
+        type === 'legal' ? company_name : null, // <<<--- Вот тут
+        type === 'legal' ? legal_address : null // <<<--- Вот тут
+      ]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    console.error('Error adding counterparty:', err);
+    res.status(500).json({ error: 'Failed to add counterparty' });
+  }
+});
+// <<<--- Обновим маршрут для получения контрагентов --->
+router.get('/counterparties', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT id, type, fio, phone, email, address, inn, kpp, ogrn, company_name, legal_address FROM counterparties ORDER BY created_at DESC');
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Error fetching counterparties:', err);
+    res.status(500).json({ error: 'Failed to fetch counterparties' });
+  }
+});
+
+// <<<--- Обновим маршрут для продажи нескольких запчастей --->
+// <<<--- ДОБАВИМ маршрут ПЕРЕД /:qr_code --->
+router.post('/sell-part', authenticateToken, async (req, res) => {
+  const { items, total_amount, counterparty_id } = req.body;
+
+  if (!items || !Array.isArray(items) || items.length === 0 || !total_amount) {
+    return res.status(400).json({ error: 'Items array and total amount are required' });
+  }
+
+  try {
+    const results = [];
+
+    for (const itemData of items) {
+      const { item_id, selling_price } = itemData;
+
+      if (!item_id || !selling_price) {
+        return res.status(400).json({ error: 'Each item must have ID and selling price' });
+      }
+
+      const itemResult = await pool.query('SELECT * FROM items WHERE id = $1', [item_id]);
+      if (itemResult.rows.length === 0) {
+        return res.status(404).json({ error: `Item with ID ${item_id} not found` });
+      }
+
+      const item = itemResult.rows[0];
+
+      if (item.quantity <= 0) {
+        return res.status(400).json({ error: `Item with ID ${item_id} is out of stock` });
+      }
+
+      const newQuantity = item.quantity - 1;
+      await pool.query('UPDATE items SET quantity = $1, status = $2 WHERE id = $3', [newQuantity, 'sold', item_id]);
+
+      if (newQuantity === 0) {
+        await pool.query('UPDATE items SET status = $1 WHERE id = $2', ['sold', item_id]);
+      }
+
+      const saleDate = new Date().toISOString().split('T')[0];
+
+      const soldResult = await pool.query(
+        `INSERT INTO sold_parts (item_id, item_name, item_description, part_number, car_model, vin_number, selling_price, sale_date, counterparty_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+        [item_id, item.name, item.description, item.part_number, item.car_model, item.vin_number, selling_price, saleDate, counterparty_id || null]
+      );
+
+      results.push(soldResult.rows[0]);
+    }
+
+    res.json({ message: 'Items sold successfully', sold_records: results });
+  } catch (err) {
+    console.error('Error selling items:', err);
+    res.status(500).json({ error: 'Failed to sell items' });
+  }
+});
+
+// <<<--- УБЕРИМ ДУБЛИКАТ /sell-part --->
+// (удалил дубликат)
+
+// <<<--- УБЕРИМ ДУБЛИКАТ /counterparties --->
+// (удалил дубликат)
+
 // Получить товар по QR-коду
+// <<<--- ЭТОТ маршрут ДОЛЖЕН БЫТЬ ПОСЛЕДНИМ --->
 router.get('/:qr_code', authenticateToken, async (req, res) => {
   const { qr_code } = req.params;
   try {
@@ -341,44 +453,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
   }
 });
 
-router.post('/sell-part', authenticateToken, async (req, res) => {
-  const { item_id, selling_price, buyer_name, buyer_info, buyer_phone } = req.body; 
+// <<<--- УБЕРИМ ДУБЛИКАТ /sell-part --->
+// (удалил дубликат)
 
-  if (!item_id || !selling_price) {
-    return res.status(400).json({ error: 'Item ID and selling price are required' });
-  }
-
-  try {
-    const itemResult = await pool.query('SELECT * FROM items WHERE id = $1', [item_id]);
-    if (itemResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Item not found' });
-    }
-
-    const item = itemResult.rows[0];
-
-    if (item.quantity <= 0) {
-      return res.status(400).json({ error: 'Item is out of stock' });
-    }
-
-    const newQuantity = item.quantity - 1;
-    await pool.query('UPDATE items SET quantity = $1, status = $2 WHERE id = $3', [newQuantity, 'sold', item_id]);
-
-    if (newQuantity === 0) {
-      await pool.query('UPDATE items SET status = $1 WHERE id = $2', ['sold', item_id]);
-    }
-
-    const saleDate = new Date().toISOString().split('T')[0];
-
-    const soldResult = await pool.query(
-      `INSERT INTO sold_parts (item_id, item_name, item_description, part_number, car_model, vin_number, selling_price, sale_date, buyer_name, buyer_info, buyer_phone)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
-      [item_id, item.name, item.description, item.part_number, item.car_model, item.vin_number, selling_price, saleDate, buyer_name || null, buyer_info || null, buyer_phone || null] // <<<--- Передадим buyer_phone
-    );
-
-    res.json({ message: 'Item sold successfully', sold_record: soldResult.rows[0] });
-  } catch (err) {
-    console.error('Error selling item:', err);
-    res.status(500).json({ error: 'Failed to sell item' });
-  }
-});
 export default router;
