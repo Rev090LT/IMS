@@ -84,8 +84,17 @@ router.put('/cars/:id', authenticateToken, async (req, res) => {
 
 // <<<--- Маршрут для получения списка контрагентов --->
 // <<<--- ДОБАВИМ маршрут ПЕРЕД /:qr_code --->
+router.get('/counterparties', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT id, type, fio, phone, email, address, inn, kpp, ogrn, company_name, legal_address FROM counterparties ORDER BY created_at DESC');
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Error fetching counterparties:', err);
+    res.status(500).json({ error: 'Failed to fetch counterparties' });
+  }
+});
+
 // <<<--- Маршрут для добавления контрагента --->
-// <<<--- Обновим маршрут для добавления контрагента --->
 router.post('/counterparties', authenticateToken, async (req, res) => {
   const { type, fio, phone, email, address, inn, kpp, ogrn, company_name, legal_address } = req.body;
 
@@ -120,21 +129,43 @@ router.post('/counterparties', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to add counterparty' });
   }
 });
-// <<<--- Обновим маршрут для получения контрагентов --->
-router.get('/counterparties', authenticateToken, async (req, res) => {
+
+// <<<--- Маршрут для получения списка поставщиков --->
+// <<<--- ДОБАВИМ маршрут ПЕРЕД /:qr_code --->
+router.get('/suppliers', authenticateToken, async (req, res) => {
   try {
-    const result = await pool.query('SELECT id, type, fio, phone, email, address, inn, kpp, ogrn, company_name, legal_address FROM counterparties ORDER BY created_at DESC');
+    const result = await pool.query('SELECT id, name, inn, ogrn, kpp, legal_address, actual_address FROM suppliers ORDER BY created_at DESC');
     res.json(result.rows);
   } catch (err) {
-    console.error('Error fetching counterparties:', err);
-    res.status(500).json({ error: 'Failed to fetch counterparties' });
+    console.error('Error fetching suppliers:', err);
+    res.status(500).json({ error: 'Failed to fetch suppliers' });
+  }
+});
+
+// <<<--- Маршрут для добавления поставщика --->
+// <<<--- ДОБАВИМ маршрут ПЕРЕД /:qr_code --->
+router.post('/suppliers', authenticateToken, async (req, res) => {
+  const { name, inn, ogrn, kpp, legal_address, actual_address } = req.body;
+
+  if (!name || !inn || !legal_address) {
+    return res.status(400).json({ error: 'Name, INN, and legal address are required' });
+  }
+
+  try {
+    const result = await pool.query(
+      'INSERT INTO suppliers (name, inn, ogrn, kpp, legal_address, actual_address) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+      [name, inn, ogrn || null, kpp || null, legal_address, actual_address || null]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    console.error('Error adding supplier:', err);
+    res.status(500).json({ error: 'Failed to add supplier' });
   }
 });
 
 // <<<--- Обновим маршрут для продажи нескольких запчастей --->
-// <<<--- ДОБАВИМ маршрут ПЕРЕД /:qr_code --->
 router.post('/sell-part', authenticateToken, async (req, res) => {
-  const { items, total_amount, counterparty_id } = req.body;
+  const { items, total_amount, counterparty_id, supplier_id } = req.body;
 
   if (!items || !Array.isArray(items) || items.length === 0 || !total_amount) {
     return res.status(400).json({ error: 'Items array and total amount are required' });
@@ -144,10 +175,10 @@ router.post('/sell-part', authenticateToken, async (req, res) => {
     const results = [];
 
     for (const itemData of items) {
-      const { item_id, selling_price } = itemData;
+      const { item_id, quantity, selling_price } = itemData;
 
-      if (!item_id || !selling_price) {
-        return res.status(400).json({ error: 'Each item must have ID and selling price' });
+      if (!item_id || !quantity || !selling_price) {
+        return res.status(400).json({ error: 'Each item must have ID, quantity and selling price' });
       }
 
       const itemResult = await pool.query('SELECT * FROM items WHERE id = $1', [item_id]);
@@ -157,23 +188,19 @@ router.post('/sell-part', authenticateToken, async (req, res) => {
 
       const item = itemResult.rows[0];
 
-      if (item.quantity <= 0) {
-        return res.status(400).json({ error: `Item with ID ${item_id} is out of stock` });
+      if (item.quantity < quantity) {
+        return res.status(400).json({ error: `Item with ID ${item_id} has insufficient quantity` });
       }
 
-      const newQuantity = item.quantity - 1;
-      await pool.query('UPDATE items SET quantity = $1, status = $2 WHERE id = $3', [newQuantity, 'sold', item_id]);
-
-      if (newQuantity === 0) {
-        await pool.query('UPDATE items SET status = $1 WHERE id = $2', ['sold', item_id]);
-      }
+      const newQuantity = item.quantity - quantity;
+      await pool.query('UPDATE items SET quantity = $1, status = $2 WHERE id = $3', [newQuantity, newQuantity === 0 ? 'sold' : item.status, item_id]);
 
       const saleDate = new Date().toISOString().split('T')[0];
 
       const soldResult = await pool.query(
-        `INSERT INTO sold_parts (item_id, item_name, item_description, part_number, car_model, vin_number, selling_price, sale_date, counterparty_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
-        [item_id, item.name, item.description, item.part_number, item.car_model, item.vin_number, selling_price, saleDate, counterparty_id || null]
+        `INSERT INTO sold_parts (item_id, item_name, item_description, part_number, car_model, vin_number, selling_price, sale_date, counterparty_id, supplier_id, quantity)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+        [item_id, item.name, item.description, item.part_number, item.car_model, item.vin_number, selling_price, saleDate, counterparty_id || null, supplier_id || null, quantity]
       );
 
       results.push(soldResult.rows[0]);
@@ -186,143 +213,32 @@ router.post('/sell-part', authenticateToken, async (req, res) => {
   }
 });
 
-// <<<--- УБЕРИМ ДУБЛИКАТ /sell-part --->
-// (удалил дубликат)
-
-// <<<--- УБЕРИМ ДУБЛИКАТ /counterparties --->
-// (удалил дубликат)
-
-// Получить товар по QR-коду
-// <<<--- ЭТОТ маршрут ДОЛЖЕН БЫТЬ ПОСЛЕДНИМ --->
-router.get('/:qr_code', authenticateToken, async (req, res) => {
-  const { qr_code } = req.params;
-  try {
-    const item = await Item.getByQR(qr_code);
-    if (!item) {
-      return res.status(404).json({ error: 'Item not found' });
-    }
-    res.json(item);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Списание товара
-router.post('/dispose', authenticateToken, async (req, res) => {
-  const { qr_code, quantity } = req.body;
-
-  if (!qr_code || quantity <= 0) {
-    return res.status(400).json({ error: 'QR код и количество обязательны' });
-  }
+// <<<--- Маршрут для удаления товара --->
+// <<<--- ДОБАВИМ маршрут ПЕРЕД /:qr_code --->
+router.delete('/:id', authenticateToken, async (req, res) => {
+  const { id } = req.params;
 
   try {
-    // Найдём товар по qr_code
-    const itemResult = await pool.query('SELECT * FROM items WHERE qr_code = $1', [qr_code]);
-    if (itemResult.rows.length === 0) {
+    const result = await pool.query('DELETE FROM items WHERE id = $1 RETURNING *', [parseInt(id)]);
+
+    if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Item not found' });
     }
 
-    const item = itemResult.rows[0];
-
-    if (item.quantity < quantity) {
-      return res.status(400).json({ error: 'Невозможно списать позицию, которой нет в наличии' });
-    }
-
-    // Обновим количество
-    const newQuantity = item.quantity - quantity;
-    await pool.query('UPDATE items SET quantity = $1 WHERE qr_code = $2', [newQuantity, qr_code]);
-
-    // Запишем в историю
-    await pool.query(`
-      INSERT INTO movements (item_id, from_location_id, to_location_id, employee_id, action_type, quantity, comment)
-      VALUES ($1, $2, NULL, $3, 'dispose', $4, 'Disposed via modal')
-    `, [item.id, item.location_id, req.user.id, quantity]);
-
-    // Проверим, стало ли количество 0
-    if (newQuantity === 0) {
-      // Установим статус 'disposed'
-      await pool.query('UPDATE items SET status = $1 WHERE qr_code = $2', ['disposed', qr_code]);
-    } else if (item.status === 'disposed' && newQuantity > 0) {
-      // Если был 'disposed', но количество > 0, вернём статус 'warehouse'
-      await pool.query('UPDATE items SET status = $1 WHERE qr_code = $2', ['warehouse', qr_code]);
-    }
-
-    res.status(200).json({ message: 'Позиция успешно списана', newQuantity });
+    res.json({ message: 'Item deleted successfully', deleted_item: result.rows[0] });
   } catch (err) {
-    console.error('Error disposing item:', err);
-    res.status(500).json({ error: err.message });
+    console.error('Error deleting item:', err);
+    res.status(500).json({ error: 'Failed to delete item' });
   }
 });
-
-// Перемещение товара (новый маршрут)
-router.post('/move', authenticateToken, async (req, res) => {
-  const { qr_code, from_location_id, to_location_id, quantity, comment } = req.body; // <= Вот тут
-
-  console.log('Received POST /api/items/move:', { qr_code, from_location_id, to_location_id, quantity, comment });
-
-  if (!qr_code || !from_location_id || !to_location_id || quantity <= 0) { // <= Вот тут
-    return res.status(400).json({ error: 'QR Code, From Location, To Location, and Quantity are required' }); // <= Вот тук
-  }
-
-  try {
-    // <<<--- Вот тут найдём item_id по qr_code --->
-    const itemResult = await pool.query('SELECT id FROM items WHERE qr_code = $1 AND location_id = $2', [qr_code, from_location_id]);
-    if (itemResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Item not found in the specified location' });
-    }
-
-    const item = itemResult.rows[0];
-    const item_id = item.id; // <= Вот тут
-
-    // ... (остальной код, используя item_id)
-    if (item.quantity < quantity) {
-      return res.status(400).json({ error: 'Not enough quantity to move' });
-    }
-
-    // Обновим количество в старой локации
-    const newQuantity = item.quantity - quantity;
-    await pool.query('UPDATE items SET quantity = $1 WHERE id = $2', [newQuantity, item_id]);
-
-    // Если товара не осталось на старой локации, проверим статус
-    if (newQuantity === 0) {
-      await pool.query('UPDATE items SET status = $1 WHERE id = $2', ['disposed', item_id]);
-    } else if (item.status === 'disposed' && newQuantity > 0) {
-      await pool.query('UPDATE items SET status = $1 WHERE id = $2', ['warehouse', item_id]);
-    }
-
-    // Проверим, существует ли уже товар в новой локации
-    const existingItemResult = await pool.query('SELECT id FROM items WHERE qr_code = $1 AND location_id = $2', [qr_code, to_location_id]); // <= Вот тут
-    if (existingItemResult.rows.length > 0) {
-      // Объединим с существующим товаром
-      await pool.query('UPDATE items SET quantity = quantity + $1 WHERE id = $2', [quantity, existingItemResult.rows[0].id]);
-    } else {
-      // Создадим новый товар в новой локации
-      await pool.query(`
-        INSERT INTO items (qr_code, name, description, quantity, status, location_id, created_by_user_id)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
-      `, [qr_code, item.name, item.description, quantity, 'warehouse', to_location_id, item.created_by_user_id]);
-    }
-
-    // Запишем в историю
-    await pool.query(`
-      INSERT INTO movements (item_id, from_location_id, to_location_id, employee_id, action_type, quantity, comment)
-      VALUES ($1, $2, $3, $4, 'move', $5, $6)
-    `, [item_id, from_location_id, to_location_id, req.user.id, quantity, comment || null]);
-
-    res.status(200).json({ message: 'Item moved successfully' });
-  } catch (err) {
-    console.error('Error moving item:', err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// <<<--- УБЕРЁМ маршрут /locations из items.js --->>>
 
 // <<<--- Обновим маршрут GET / --->
 // <<<--- Обновим маршрут GET / --->
 router.get('/', async (req, res) => {
   try {    
-    const result = await pool.query(`
+    const { part_number } = req.query; // <<<--- Получим part_number из query
+    
+    let query = `
       SELECT 
         i.id,
         i.qr_code,
@@ -344,7 +260,18 @@ router.get('/', async (req, res) => {
       LEFT JOIN locations l ON i.location_id = l.id
       LEFT JOIN categories c ON i.category_id = c.id
       LEFT JOIN manufacturers m ON i.manufacturer_id = m.id
-    `);
+    `;
+    
+    const params = [];
+    
+    if (part_number) {
+      query += ` WHERE LOWER(i.part_number) LIKE LOWER($1)`;
+      params.push(`%${part_number}%`);
+    }
+    
+    query += ` ORDER BY i.created_at DESC`;
+
+    const result = await pool.query(query, params);
 
     res.json(result.rows);
   } catch (err) {
@@ -425,6 +352,7 @@ router.get('/search-by-name/:name', authenticateToken, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
 // <<<--- Маршрут для обновления товара --->
 router.put('/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
@@ -453,7 +381,128 @@ router.put('/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// <<<--- УБЕРИМ ДУБЛИКАТ /sell-part --->
-// (удалил дубликат)
+// <<<--- СПИСАНИЕ ТОВАРА --->
+router.post('/dispose', authenticateToken, async (req, res) => {
+  const { qr_code, quantity } = req.body;
+
+  if (!qr_code || quantity <= 0) {
+    return res.status(400).json({ error: 'QR код и количество обязательны' });
+  }
+
+  try {
+    // Найдём товар по qr_code
+    const itemResult = await pool.query('SELECT * FROM items WHERE qr_code = $1', [qr_code]);
+    if (itemResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Item not found' });
+    }
+
+    const item = itemResult.rows[0];
+
+    if (item.quantity < quantity) {
+      return res.status(400).json({ error: 'Невозможно списать позицию, которой нет в наличии' });
+    }
+
+    // Обновим количество
+    const newQuantity = item.quantity - quantity;
+    await pool.query('UPDATE items SET quantity = $1 WHERE qr_code = $2', [newQuantity, qr_code]);
+
+    // Запишем в историю
+    await pool.query(`
+      INSERT INTO movements (item_id, from_location_id, to_location_id, employee_id, action_type, quantity, comment)
+      VALUES ($1, $2, NULL, $3, 'dispose', $4, 'Disposed via modal')
+    `, [item.id, item.location_id, req.user.id, quantity]);
+
+    // Проверим, стало ли количество 0
+    if (newQuantity === 0) {
+      // Установим статус 'disposed'
+      await pool.query('UPDATE items SET status = $1 WHERE qr_code = $2', ['disposed', qr_code]);
+    } else if (item.status === 'disposed' && newQuantity > 0) {
+      // Если был 'disposed', но количество > 0, вернём статус 'warehouse'
+      await pool.query('UPDATE items SET status = $1 WHERE qr_code = $2', ['warehouse', qr_code]);
+    }
+
+    res.status(200).json({ message: 'Позиция успешно списана', newQuantity });
+  } catch (err) {
+    console.error('Error disposing item:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// <<<--- ПЕРЕМЕЩЕНИЕ ТОВАРА --->
+router.post('/move', authenticateToken, async (req, res) => {
+  const { qr_code, from_location_id, to_location_id, quantity, comment } = req.body; // <= Вот тут
+
+  console.log('Received POST /api/items/move:', { qr_code, from_location_id, to_location_id, quantity, comment });
+
+  if (!qr_code || !from_location_id || !to_location_id || quantity <= 0) { // <= Вот тут
+    return res.status(400).json({ error: 'QR Code, From Location, To Location, and Quantity are required' }); // <= Вот тук
+  }
+
+  try {
+    // <<<--- Вот тут найдём item_id по qr_code --->
+    const itemResult = await pool.query('SELECT id FROM items WHERE qr_code = $1 AND location_id = $2', [qr_code, from_location_id]);
+    if (itemResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Item not found in the specified location' });
+    }
+
+    const item = itemResult.rows[0];
+    const item_id = item.id; // <= Вот тут
+
+    // ... (остальной код, используя item_id)
+    if (item.quantity < quantity) {
+      return res.status(400).json({ error: 'Not enough quantity to move' });
+    }
+
+    // Обновим количество в старой локации
+    const newQuantity = item.quantity - quantity;
+    await pool.query('UPDATE items SET quantity = $1 WHERE id = $2', [newQuantity, item_id]);
+
+    // Если товара не осталось на старой локации, проверим статус
+    if (newQuantity === 0) {
+      await pool.query('UPDATE items SET status = $1 WHERE id = $2', ['disposed', item_id]);
+    } else if (item.status === 'disposed' && newQuantity > 0) {
+      await pool.query('UPDATE items SET status = $1 WHERE id = $2', ['warehouse', item_id]);
+    }
+
+    // Проверим, существует ли уже товар в новой локации
+    const existingItemResult = await pool.query('SELECT id FROM items WHERE qr_code = $1 AND location_id = $2', [qr_code, to_location_id]); // <= Вот тут
+    if (existingItemResult.rows.length > 0) {
+      // Объединим с существующим товаром
+      await pool.query('UPDATE items SET quantity = quantity + $1 WHERE id = $2', [quantity, existingItemResult.rows[0].id]);
+    } else {
+      // Создадим новый товар в новой локации
+      await pool.query(`
+        INSERT INTO items (qr_code, name, description, quantity, status, location_id, created_by_user_id)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `, [qr_code, item.name, item.description, quantity, 'warehouse', to_location_id, item.created_by_user_id]);
+    }
+
+    // Запишем в историю
+    await pool.query(`
+      INSERT INTO movements (item_id, from_location_id, to_location_id, employee_id, action_type, quantity, comment)
+      VALUES ($1, $2, $3, $4, 'move', $5, $6)
+    `, [item_id, from_location_id, to_location_id, req.user.id, quantity, comment || null]);
+
+    res.status(200).json({ message: 'Item moved successfully' });
+  } catch (err) {
+    console.error('Error moving item:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// <<<--- ПОЛУЧИТЬ ТОВАР ПО QR-КОДУ --->
+// <<<--- ЭТОТ маршрут ДОЛЖЕН БЫТЬ ПОСЛЕДНИМ --->
+router.get('/:qr_code', authenticateToken, async (req, res) => {
+  const { qr_code } = req.params;
+  try {
+    const item = await Item.getByQR(qr_code);
+    if (!item) {
+      return res.status(404).json({ error: 'Item not found' });
+    }
+    res.json(item);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 export default router;

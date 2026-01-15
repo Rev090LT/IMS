@@ -129,7 +129,18 @@ CREATE TABLE counterparties (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
-
+--поставщики 
+CREATE TABLE suppliers (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  inn VARCHAR(20),
+  ogrn VARCHAR(20),
+  kpp VARCHAR(20),
+  legal_address TEXT,
+  actual_address TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 ALTER TABLE items ADD COLUMN category_id INTEGER REFERENCES categories(id);
 ALTER TABLE items ADD COLUMN manufacturer_id INTEGER REFERENCES manufacturers(id);
 ALTER TABLE items ADD COLUMN part_number VARCHAR(255);
@@ -143,4 +154,18 @@ ALTER TABLE counterparties ADD COLUMN kpp VARCHAR(9); -- Для юрлиц
 ALTER TABLE counterparties ADD COLUMN ogrn VARCHAR(13); -- Для юрлиц
 ALTER TABLE counterparties ADD COLUMN company_name VARCHAR(255); -- Для юрлиц
 ALTER TABLE counterparties ADD COLUMN legal_address TEXT; -- Для юрлиц
+ALTER TABLE counterparties ALTER COLUMN fio DROP NOT NULL;
+ALTER TABLE sold_parts ADD COLUMN counterparty_id INTEGER REFERENCES counterparties(id);
+ALTER TABLE sold_parts ADD COLUMN supplier_id INTEGER REFERENCES suppliers(id);
+-- Если колонка selling_price не существует
+ALTER TABLE sold_parts ADD COLUMN IF NOT EXISTS selling_price DECIMAL(10,2);
+
+-- Если колонка sale_date не существует
+ALTER TABLE sold_parts ADD COLUMN IF NOT EXISTS sale_date DATE;
+
+-- Если колонка quantity не существует
+ALTER TABLE sold_parts ADD COLUMN IF NOT EXISTS quantity INTEGER DEFAULT 1;
+
+-- Если колонка supplier_id не существует
+ALTER TABLE sold_parts ADD COLUMN IF NOT EXISTS supplier_id INTEGER REFERENCES suppliers(id);
 TRUNCATE TABLE имя_таблицы; --удалить все из таблицы

@@ -203,9 +203,9 @@ function PrintReceiptModal({ receipt, onClose, token }) {
                   <td style={{ border: '1px solid #ddd', padding: '4px' }}>{index + 1}</td>
                   <td style={{ border: '1px solid #ddd', padding: '4px' }}>{itemData.item.qr_code || 'N/A'}</td>
                   <td style={{ border: '1px solid #ddd', padding: '4px' }}>{itemData.item.name || 'N/A'}</td>
-                  <td style={{ border: '1px solid #ddd', padding: '4px', textAlign: 'right' }}>1 шт</td>
+                  <td style={{ border: '1px solid #ddd', padding: '4px', textAlign: 'right' }}>{itemData.quantity} шт</td>
                   <td style={{ border: '1px solid #ddd', padding: '4px', textAlign: 'right' }}>{itemData.selling_price.toFixed(2)} руб</td>
-                  <td style={{ border: '1px solid #ddd', padding: '4px', textAlign: 'right' }}>{itemData.selling_price.toFixed(2)} руб</td>
+                  <td style={{ border: '1px solid #ddd', padding: '4px', textAlign: 'right' }}>{(itemData.selling_price * itemData.quantity).toFixed(2)} руб</td>
                 </tr>
               ))}
             </tbody>

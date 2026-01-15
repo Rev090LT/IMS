@@ -133,8 +133,7 @@ function Dashboard() {
 
   return (
     <div style={{
-      backgroundImage: `url(${backgroundImage})`,
-      backgroundSize: 'cover',
+      backgroundImage: "url(" + { backgroundImage } + ")",
       backgroundPosition: 'center',
       minHeight: '100vh',
       margin: 0,
@@ -181,7 +180,7 @@ function Dashboard() {
 
         <main className="dashboard-main-content dashboard-main-content-flex">
           <div className="dashboard-user-info-bar">
-            {userInfo && <span className="user-info-text">Welcome, {userInfo.username}!</span>}
+            {userInfo && <span className="user-info-text">Добро пожаловать, {userInfo.username}!</span>}
           </div>
 
           <h2 className="dashboard-section-title">Основное меню</h2>
@@ -338,7 +337,6 @@ function Dashboard() {
             </button>
           </div>
         </main>
-
         {/* Модальные окна */}
         {activeModal === 'scan' && <ScanModal onClose={() => setActiveModal(null)} token={token} />}
         {activeModal === 'move' && <MoveModal onClose={() => setActiveModal(null)} token={token} />}

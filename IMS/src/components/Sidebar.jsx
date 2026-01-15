@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom'; // <<<--- Импортируем для навигации
 import CarListModal from './CarListModal';
 import SoldPartsModal from './SoldPartsModal'; // <<<--- Импортируем модуль
 
 function Sidebar({ isOpen, onClose, onOpenSQLConsole, onOpenAddUserModal, onOpenAboutDeveloper, onOpenAddManufacturerModal, onOpenAddCategoryModal, onOpenNodeLogConsole, userRole }) {
   const [showCarListModal, setShowCarListModal] = useState(false);
   const [showSoldPartsModal, setShowSoldPartsModal] = useState(false); // <<<--- Новое состояние
+  const navigate = useNavigate(); // <<<--- Хук для навигации
   const isAdmin = userRole === 'admin';
 
   const openCarListModal = () => {
@@ -21,6 +23,12 @@ function Sidebar({ isOpen, onClose, onOpenSQLConsole, onOpenAddUserModal, onOpen
 
   const closeSoldPartsModal = () => { // <<<--- Новая функция
     setShowSoldPartsModal(false);
+  };
+
+  // <<<--- Функция для перехода на страницу документооборота --->
+  const goToDocumentFlow = () => {
+    navigate('/document-flow');
+    onClose();
   };
 
   return (
@@ -75,7 +83,7 @@ function Sidebar({ isOpen, onClose, onOpenSQLConsole, onOpenAddUserModal, onOpen
               </a>
             </li>
             <li style={{ marginBottom: '20px' }}>
-              <a href="#!" style={{ color: 'white', textDecoration: 'none', fontSize: '16px' }}>
+              <a href="#!" style={{ color: 'white', textDecoration: 'none', fontSize: '16px' }} onClick={(e) => e.preventDefault()}>
                 Настройки
               </a>
             </li>
@@ -136,12 +144,11 @@ function Sidebar({ isOpen, onClose, onOpenSQLConsole, onOpenAddUserModal, onOpen
                 href="#!"
                 onClick={(e) => {
                   e.preventDefault();
-                  openSoldPartsModal(); // <<<--- Новая кнопка
-                  onClose();
+                  goToDocumentFlow(); // <<<--- Переход на страницу документооборота
                 }}
                 style={{ color: 'white', textDecoration: 'none', fontSize: '16px', cursor: 'pointer' }}
               >
-                 Проданные запчасти
+                Документооборот
               </a>
             </li>
             {isAdmin && (

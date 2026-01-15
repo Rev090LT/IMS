@@ -7,16 +7,26 @@ function SellPartModal({ onClose, token }) {
   const [counterparties, setCounterparties] = useState([]);
   const [selectedCounterparty, setSelectedCounterparty] = useState('');
   const [newCounterparty, setNewCounterparty] = useState({ 
-    type: 'physical', // <<<--- Тип контрагента
+    type: 'physical', 
     fio: '', 
     phone: '', 
     email: '', 
     address: '',
-    inn: '', // <<<--- Для юрлиц
-    kpp: '', // <<<--- Для юрлиц
-    ogrn: '', // <<<--- Для юрлиц
-    company_name: '', // <<<--- Для юрлиц
-    legal_address: '' // <<<--- Для юрлиц
+    inn: '',
+    kpp: '',
+    ogrn: '',
+    company_name: '',
+    legal_address: ''
+  });
+  const [suppliers, setSuppliers] = useState([]);
+  const [selectedSupplier, setSelectedSupplier] = useState('');
+  const [newSupplier, setNewSupplier] = useState({ 
+    name: '', 
+    inn: '', 
+    ogrn: '', 
+    kpp: '', 
+    legal_address: '', 
+    actual_address: '' 
   });
   const [saleDate, setSaleDate] = useState(new Date().toISOString().split('T')[0]);
   const [error, setError] = useState('');
@@ -53,6 +63,18 @@ function SellPartModal({ onClose, token }) {
 
         data = await response.json();
         setCounterparties(data);
+
+        // <<<--- Загрузим поставщиков --->
+        response = await fetch('/api/items/suppliers', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch suppliers');
+        }
+
+        data = await response.json();
+        setSuppliers(data);
       } catch (err) {
         setError(err.message);
       } finally {
@@ -66,8 +88,9 @@ function SellPartModal({ onClose, token }) {
   // <<<--- Добавить товар в список --->
   const handleAddItem = (itemId) => {
     const item = items.find(i => i.id === parseInt(itemId));
-    if (item && !selectedItems.some(si => si.id === item.id)) {
-      setSelectedItems(prev => [...prev, { ...item, selling_price: 0 }]);
+    if (item) { // <<<--- Убрали проверку !selectedItems.some(si => si.id === item.id)
+      // <<<--- Добавим товар с количеством 1 и ценой 0 --->
+      setSelectedItems(prev => [...prev, { ...item, quantity: 1, selling_price: 0 }]);
     }
   };
 
@@ -76,10 +99,17 @@ function SellPartModal({ onClose, token }) {
     setSelectedItems(prev => prev.filter(item => item.id !== itemId));
   };
 
-  // <<<--- Изменить цену --->
+  // <<<--- Изменить количество --->
   const handlePriceChange = (itemId, newPrice) => {
     setSelectedItems(prev =>
-      prev.map(item => item.id === itemId ? { ...item, selling_price: parseFloat(newPrice) || 0 } : item)
+        prev.map(item => item.id === itemId ? { ...item, selling_price: parseFloat(newPrice) || 0 } : item)
+    );
+  };
+
+  // <<<--- Изменить количество --->
+  const handleQuantityChange = (itemId, newQuantity) => {
+    setSelectedItems(prev =>
+        prev.map(item => item.id === itemId ? { ...item, quantity: Math.max(1, parseInt(newQuantity) || 1) } : item)
     );
   };
 
@@ -138,6 +168,52 @@ function SellPartModal({ onClose, token }) {
     }
   };
 
+  // <<<--- Обновить данные нового поставщика --->
+  const handleNewSupplierChange = (field, value) => {
+    setNewSupplier(prev => ({ ...prev, [field]: value }));
+  };
+
+  // <<<--- Добавить нового поставщика --->
+  const handleAddNewSupplier = async () => {
+    if (!newSupplier.name || !newSupplier.inn || !newSupplier.legal_address) {
+      setError('Name, INN, and legal address are required for supplier');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/items/suppliers', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(newSupplier),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to add supplier');
+      }
+
+      // <<<--- Обновим список поставщиков --->
+      setSuppliers(prev => [data, ...prev]);
+      setSelectedSupplier(data.id.toString());
+
+      // <<<--- Очистим форму --->
+      setNewSupplier({ 
+        name: '', 
+        inn: '', 
+        ogrn: '', 
+        kpp: '', 
+        legal_address: '', 
+        actual_address: '' 
+      });
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
   // <<<--- Подсчитать итого --->
   const handleCalculateTotal = () => {
     if (selectedItems.length === 0) {
@@ -151,16 +227,17 @@ function SellPartModal({ onClose, token }) {
       return;
     }
 
-    const totalAmount = selectedItems.reduce((sum, item) => sum + item.selling_price, 0);
+    const totalAmount = selectedItems.reduce((sum, item) => sum + (item.selling_price * item.quantity), 0);
     
     const receipt = {
       items: selectedItems.map(item => ({
         item: item,
+        quantity: item.quantity,
         selling_price: item.selling_price
       })),
       totalAmount: totalAmount,
       sale_date: saleDate,
-      seller: seller,
+      seller: suppliers.find(s => s.id === parseInt(selectedSupplier))?.name || seller,
       counterparty: counterparties.find(cp => cp.id === parseInt(selectedCounterparty)) || null
     };
 
@@ -184,10 +261,12 @@ function SellPartModal({ onClose, token }) {
         body: JSON.stringify({
           items: selectedItems.map(item => ({
             item_id: item.id,
+            quantity: item.quantity,
             selling_price: item.selling_price
           })),
           total_amount: receiptData.totalAmount,
-          counterparty_id: selectedCounterparty ? parseInt(selectedCounterparty) : null
+          counterparty_id: selectedCounterparty ? parseInt(selectedCounterparty) : null,
+          supplier_id: selectedSupplier ? parseInt(selectedSupplier) : null
         }),
       });
 
@@ -198,6 +277,39 @@ function SellPartModal({ onClose, token }) {
       }
 
       setSuccess('Запчасти успешно проданы!');
+
+      // <<<--- Очистим все данные после успешной продажи --->
+      setTimeout(() => {
+        setSelectedItems([]);
+        setSelectedCounterparty('');
+        setNewCounterparty({ 
+          type: 'physical', 
+          fio: '', 
+          phone: '', 
+          email: '', 
+          address: '',
+          inn: '',
+          kpp: '',
+          ogrn: '',
+          company_name: '',
+          legal_address: ''
+        });
+        setSelectedSupplier('');
+        setNewSupplier({ 
+          name: '', 
+          inn: '', 
+          ogrn: '', 
+          kpp: '', 
+          legal_address: '', 
+          actual_address: '' 
+        });
+        setSaleDate(new Date().toISOString().split('T')[0]);
+        setSeller('ИП Иванов И.И.');
+        setReceiptData(null);
+        
+        // <<<--- Удалим сохранённые данные из localStorage --->
+        localStorage.removeItem('sellPartModalData');
+      }, 1000);
     } catch (err) {
       setError(err.message);
     }
@@ -208,6 +320,58 @@ function SellPartModal({ onClose, token }) {
       setShowReceiptModal(true);
     }
   };
+
+  // <<<--- Сохранить данные при закрытии --->
+  const handleClose = () => {
+    // <<<--- Сохраняем все введённые данные в localStorage --->
+    localStorage.setItem('sellPartModalData', JSON.stringify({
+      selectedItems,
+      selectedCounterparty,
+      newCounterparty,
+      selectedSupplier,
+      newSupplier,
+      saleDate,
+      seller
+    }));
+    onClose();
+  };
+
+  // <<<--- Восстановить данные при открытии --->
+  useEffect(() => {
+    const savedData = localStorage.getItem('sellPartModalData');
+    if (savedData) {
+      try {
+        const parsed = JSON.parse(savedData);
+        setSelectedItems(parsed.selectedItems || []);
+        setSelectedCounterparty(parsed.selectedCounterparty || '');
+        setNewCounterparty(parsed.newCounterparty || { 
+          type: 'physical', 
+          fio: '', 
+          phone: '', 
+          email: '', 
+          address: '',
+          inn: '',
+          kpp: '',
+          ogrn: '',
+          company_name: '',
+          legal_address: ''
+        });
+        setSelectedSupplier(parsed.selectedSupplier || '');
+        setNewSupplier(parsed.newSupplier || { 
+          name: '', 
+          inn: '', 
+          ogrn: '', 
+          kpp: '', 
+          legal_address: '', 
+          actual_address: '' 
+        });
+        setSaleDate(parsed.saleDate || new Date().toISOString().split('T')[0]);
+        setSeller(parsed.seller || 'ИП Иванов И.И.');
+      } catch (e) {
+        console.error('Error parsing saved ', e);
+      }
+    }
+  }, []);
 
   if (loading) return <div>Loading...</div>;
 
@@ -239,7 +403,7 @@ function SellPartModal({ onClose, token }) {
         }}>
           <h3>Продажа запчастей</h3>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             style={{
               background: 'none',
               border: 'none',
@@ -290,7 +454,7 @@ function SellPartModal({ onClose, token }) {
                 }}
               >
                 <option value="">Выберите запчасть</option>
-                {items.filter(item => !selectedItems.some(si => si.id === item.id)).map(item => (
+                {items.map(item => ( // <<<--- Убрали .filter(item => !selectedItems.some(si => si.id === item.id))
                   <option key={item.id} value={item.id}>
                     {item.name} (Кол-во: {item.quantity}, VIN: {item.vin_number})
                   </option>
@@ -327,6 +491,20 @@ function SellPartModal({ onClose, token }) {
                       <p><strong>{item.name}</strong> (VIN: {item.vin_number})</p>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                      <span>Кол-во:</span>
+                      <input
+                        type="number"
+                        value={item.quantity}
+                        onChange={(e) => handleQuantityChange(item.id, e.target.value)}
+                        min="1"
+                        max={item.quantity}
+                        style={{
+                          width: '60px',
+                          padding: '2px',
+                          border: '1px solid #ccc',
+                          borderRadius: '4px',
+                        }}
+                      />
                       <span>Цена:</span>
                       <input
                         type="number"
@@ -389,7 +567,136 @@ function SellPartModal({ onClose, token }) {
               Подсчитать итого
             </button>
           </div>
+
           <div style={{ flex: 1 }}>
+            <div style={{ marginBottom: '15px' }}>
+              <label>Выберите поставщика:</label>
+              <select
+                value={selectedSupplier}
+                onChange={(e) => setSelectedSupplier(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '8px',
+                  border: '1px solid #ccc',
+                  borderRadius: '4px',
+                }}
+              >
+                <option value="">Новый поставщик</option>
+                {suppliers.map(supplier => (
+                  <option key={supplier.id} value={supplier.id}>
+                    {supplier.name} ({supplier.inn})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {selectedSupplier === '' && (
+              <div style={{ marginBottom: '15px' }}>
+                <h4>Новый поставщик:</h4>
+                <div style={{ marginBottom: '10px' }}>
+                  <label>Название:</label>
+                  <input
+                    type="text"
+                    value={newSupplier.name}
+                    onChange={(e) => handleNewSupplierChange('name', e.target.value)}
+                    placeholder="Введите название"
+                    style={{
+                      width: '100%',
+                      padding: '8px',
+                      border: '1px solid #ccc',
+                      borderRadius: '4px',
+                    }}
+                  />
+                </div>
+                <div style={{ marginBottom: '10px' }}>
+                  <label>ИНН:</label>
+                  <input
+                    type="text"
+                    value={newSupplier.inn}
+                    onChange={(e) => handleNewSupplierChange('inn', e.target.value)}
+                    placeholder="Введите ИНН"
+                    style={{
+                      width: '100%',
+                      padding: '8px',
+                      border: '1px solid #ccc',
+                      borderRadius: '4px',
+                    }}
+                  />
+                </div>
+                <div style={{ marginBottom: '10px' }}>
+                  <label>КПП:</label>
+                  <input
+                    type="text"
+                    value={newSupplier.kpp}
+                    onChange={(e) => handleNewSupplierChange('kpp', e.target.value)}
+                    placeholder="Введите КПП"
+                    style={{
+                      width: '100%',
+                      padding: '8px',
+                      border: '1px solid #ccc',
+                      borderRadius: '4px',
+                    }}
+                  />
+                </div>
+                <div style={{ marginBottom: '10px' }}>
+                  <label>ОГРН:</label>
+                  <input
+                    type="text"
+                    value={newSupplier.ogrn}
+                    onChange={(e) => handleNewSupplierChange('ogrn', e.target.value)}
+                    placeholder="Введите ОГРН"
+                    style={{
+                      width: '100%',
+                      padding: '8px',
+                      border: '1px solid #ccc',
+                      borderRadius: '4px',
+                    }}
+                  />
+                </div>
+                <div style={{ marginBottom: '10px' }}>
+                  <label>Юридический адрес:</label>
+                  <textarea
+                    value={newSupplier.legal_address}
+                    onChange={(e) => handleNewSupplierChange('legal_address', e.target.value)}
+                    placeholder="Введите юридический адрес"
+                    style={{
+                      width: '100%',
+                      padding: '8px',
+                      border: '1px solid #ccc',
+                      borderRadius: '4px',
+                    }}
+                  />
+                </div>
+                <div style={{ marginBottom: '10px' }}>
+                  <label>Фактический адрес:</label>
+                  <textarea
+                    value={newSupplier.actual_address}
+                    onChange={(e) => handleNewSupplierChange('actual_address', e.target.value)}
+                    placeholder="Введите фактический адрес"
+                    style={{
+                      width: '100%',
+                      padding: '8px',
+                      border: '1px solid #ccc',
+                      borderRadius: '4px',
+                    }}
+                  />
+                </div>
+                <button
+                  onClick={handleAddNewSupplier}
+                  style={{
+                    padding: '8px 16px',
+                    backgroundColor: '#3498db',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Добавить поставщика
+                </button>
+              </div>
+            )}
+
             <div style={{ marginBottom: '15px' }}>
               <label>Выберите контрагента:</label>
               <select
@@ -614,7 +921,7 @@ function SellPartModal({ onClose, token }) {
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             style={{
               padding: '8px 16px',
               border: '1px solid #ccc',
