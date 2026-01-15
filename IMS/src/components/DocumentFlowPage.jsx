@@ -61,7 +61,7 @@ function DocumentFlowPage({ token }) {
           });
           if (!response.ok) throw new Error(`Failed to fetch income summary: ${response.status}`);
           const data = await response.json();
-          console.log('Income Summary Data:', data); // <<<--- Отладка
+          console.log('Income Summary Data:', data);
           setIncomeSummary(data);
           setFilteredIncome(data.daily);
         }
@@ -85,15 +85,15 @@ function DocumentFlowPage({ token }) {
   useEffect(() => {
     if (startDate && endDate && incomeSummary.daily) {
       const filtered = incomeSummary.daily.filter(day => {
-        if (!day.date) return false; // <<<--- Пропускаем дни с null датой
-        const date = new Date(day.date);
+        if (!day.sale_date) return false;
+        const date = new Date(day.sale_date);
         const start = new Date(startDate);
         const end = new Date(endDate);
         return date >= start && date <= end;
       });
       setFilteredIncome(filtered);
     } else {
-      setFilteredIncome(incomeSummary.daily.filter(day => day.date)); // <<<--- Пропускаем дни с null датой
+      setFilteredIncome(incomeSummary.daily.filter(day => day.sale_date));
     }
   }, [startDate, endDate, incomeSummary]);
 
@@ -116,9 +116,9 @@ function DocumentFlowPage({ token }) {
       const rows = [];
       filteredIncome.forEach(day => {
         rows.push({
-          'Дата продажи': day.date,
-          'Количество продаж': day.count,
-          'Выручка': day.income?.toFixed(2) || '0.00',
+          'Дата продажи': day.sale_date,
+          'Количество продаж': day.daily_sales,
+          'Выручка': typeof day.daily_income === 'number' ? day.daily_income.toFixed(2) : parseFloat(day.daily_income).toFixed(2) || '0.00',
           'Наименование': '',
           'Количество': '',
           'Цена': '',
@@ -126,14 +126,14 @@ function DocumentFlowPage({ token }) {
           'Поставщик': ''
         });
 
-        day.details.forEach(detail => {
+        (day.details || []).forEach(detail => {
           rows.push({
             'Дата продажи': '',
             'Количество продаж': '',
             'Выручка': '',
             'Наименование': detail.item_name,
             'Количество': detail.quantity,
-            'Цена': detail.selling_price?.toFixed(2) || '0.00',
+            'Цена': typeof detail.selling_price === 'number' ? detail.selling_price.toFixed(2) : parseFloat(detail.selling_price).toFixed(2) || '0.00',
             'Покупатель': detail.counterparty_name,
             'Поставщик': detail.supplier_name
           });
@@ -159,7 +159,7 @@ function DocumentFlowPage({ token }) {
           part.item_id,
           part.item_name,
           part.quantity,
-          part.selling_price?.toFixed(2) || '0.00',
+          typeof part.selling_price === 'number' ? part.selling_price.toFixed(2) : parseFloat(part.selling_price).toFixed(2) || '0.00',
           part.sale_date,
           counterparties.find(cp => cp.id === part.counterparty_id)?.fio || counterparties.find(cp => cp.id === part.counterparty_id)?.company_name || '-',
           suppliers.find(s => s.id === part.supplier_id)?.name || '-'
@@ -169,9 +169,9 @@ function DocumentFlowPage({ token }) {
       const rows = [];
       filteredIncome.forEach(day => {
         rows.push([
-          day.date,
-          day.count,
-          day.income?.toFixed(2) || '0.00',
+          day.sale_date,
+          day.daily_sales,
+          typeof day.daily_income === 'number' ? day.daily_income.toFixed(2) : parseFloat(day.daily_income).toFixed(2) || '0.00',
           '',
           '',
           '',
@@ -179,14 +179,14 @@ function DocumentFlowPage({ token }) {
           ''
         ]);
 
-        day.details.forEach(detail => {
+        (day.details || []).forEach(detail => {
           rows.push([
             '',
             '',
             '',
             detail.item_name,
             detail.quantity,
-            detail.selling_price?.toFixed(2) || '0.00',
+            typeof detail.selling_price === 'number' ? detail.selling_price.toFixed(2) : parseFloat(detail.selling_price).toFixed(2) || '0.00',
             detail.counterparty_name,
             detail.supplier_name
           ]);
@@ -207,20 +207,20 @@ function DocumentFlowPage({ token }) {
   if (error) return <div>Error: {error}</div>;
 
   // <<<--- Трансформируем данные для отображения --->
-    const flattenedIncomeRows = filteredIncome.flatMap(day => [
+  const flattenedIncomeRows = filteredIncome.flatMap(day => [
     {
-        type: 'summary',
-        date: day.date,
-        count: day.count,
-        income: day.income,
-        key: `summary-${day.date || 'no-date'}-${Date.now()}-${Math.random()}`
+      type: 'summary',
+      date: day.sale_date,
+      count: typeof day.daily_sales === 'number' ? day.daily_sales : parseInt(day.daily_sales) || 0,
+      income: typeof day.daily_income === 'number' ? day.daily_income : parseFloat(day.daily_income) || 0,
+      key: `summary-${day.sale_date || 'no-date'}-${Date.now()}-${Math.random()}`
     },
-    ...day.details.map(detail => ({
-        type: 'detail',
-        detail: detail,
-        key: `detail-${day.date || 'no-date'}-${detail.item_id}-${detail.selling_price}-${Date.now()}-${Math.random()}`
+    ...(day.details || []).map(detail => ({
+      type: 'detail',
+      detail: detail,
+      key: `detail-${day.sale_date || 'no-date'}-${detail.item_id}-${detail.selling_price}-${Date.now()}-${Math.random()}`
     }))
-    ]);
+  ]);
 
   return (
     <div style={{ padding: '20px', fontFamily: 'Arial, sans-serif' }} ref={componentRef}>
@@ -406,13 +406,13 @@ function DocumentFlowPage({ token }) {
                     {part.selling_price != null ? parseFloat(part.selling_price).toFixed(2) : '0.00'}
                   </td>
                   <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>
-                    {part.sale_date}
+                    {part.sale_date ? new Date(part.sale_date).toLocaleDateString('ru-RU') : 'Нет даты'} {/* <<<--- Вот тут исправили дату */}
                   </td>
                   <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>
-                    {counterparties.find(cp => cp.id === part.counterparty_id)?.fio || counterparties.find(cp => cp.id === part.counterparty_id)?.company_name || '-'}
+                    {counterparties.find(cp => cp.id === part.counterparty_id)?.fio || counterparties.find(cp => cp.id === part.counterparty_id)?.company_name || '-'} {/* <<<--- Покупатель текстом */}
                   </td>
                   <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>
-                    {suppliers.find(s => s.id === part.supplier_id)?.name || '-'}
+                    {suppliers.find(s => s.id === part.supplier_id)?.name || '-'} {/* <<<--- Поставщик текстом */}
                   </td>
                 </tr>
               ))}
@@ -561,8 +561,8 @@ function DocumentFlowPage({ token }) {
         <div>
           <h3 style={{ marginBottom: '10px' }}>Доходы с запчастей</h3>
           <div style={{ marginBottom: '20px', padding: '10px', backgroundColor: '#e8f4fd', borderRadius: '4px' }}>
-            <p style={{ margin: '5px 0' }}><strong>Общая выручка:</strong> {(filteredIncome.reduce((sum, day) => sum + (day.income || 0), 0)).toFixed(2)} руб</p>
-            <p style={{ margin: '5px 0' }}><strong>Количество продаж:</strong> {filteredIncome.reduce((sum, day) => sum + (day.count || 0), 0)}</p>
+            <p style={{ margin: '5px 0' }}><strong>Общая выручка:</strong> {typeof incomeSummary.total === 'number' ? incomeSummary.total.toFixed(2) : parseFloat(incomeSummary.total).toFixed(2) || '0.00'} руб</p>
+            <p style={{ margin: '5px 0' }}><strong>Количество продаж:</strong> {typeof incomeSummary.count === 'number' ? incomeSummary.count : parseInt(incomeSummary.count) || 0}</p>
           </div>
           <table style={{
             width: '100%',
@@ -584,14 +584,15 @@ function DocumentFlowPage({ token }) {
                 row.type === 'summary' ? (
                   <tr key={row.key} style={{ backgroundColor: row.date % 2 === 0 ? '#f9f9f9' : 'white' }}>
                     <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>
-                      {row.date || 'Нет даты'} {/* <<<--- Показываем 'Нет даты', если null */}
+                      {row.date ? new Date(row.date).toLocaleDateString('ru-RU') : 'Нет даты'}
                     </td>
                     <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>{row.count}</td>
                     <td style={{ padding: '8px', textAlign: 'right', border: '1px solid #bdc3c7' }}>
-                      {row.income?.toFixed(2) || '0.00'}
+                      {typeof row.income === 'number' ? row.income.toFixed(2) : parseFloat(row.income).toFixed(2) || '0.00'}
                     </td>
                   </tr>
                 ) : (
+                  // <<<--- Детали продажи — отдельная строка с 5 колонками --->
                   <tr key={row.key} style={{ backgroundColor: row.detail.item_id % 2 === 0 ? '#f9f9f9' : 'white' }}>
                     <td style={{ padding: '8px', border: '1px solid #bdc3c7', fontStyle: 'italic' }} colSpan="3">
                       <div style={{ paddingLeft: '20px' }}>
@@ -603,12 +604,21 @@ function DocumentFlowPage({ token }) {
                           borderRadius: '4px',
                           overflow: 'hidden',
                         }}>
+                          <thead>
+                            <tr style={{ backgroundColor: '#f0f0f0', fontWeight: 'bold' }}>
+                              <th style={{ padding: '6px', border: '1px solid #ddd', width: '30%' }}>Наименование</th>
+                              <th style={{ padding: '6px', border: '1px solid #ddd', width: '10%' }}>Количество</th>
+                              <th style={{ padding: '6px', border: '1px solid #ddd', width: '15%' }}>Цена</th>
+                              <th style={{ padding: '6px', border: '1px solid #ddd', width: '25%' }}>Покупатель</th>
+                              <th style={{ padding: '6px', border: '1px solid #ddd', width: '20%' }}>Поставщик</th>
+                            </tr>
+                          </thead>
                           <tbody>
                             <tr>
                               <td style={{ padding: '6px', border: '1px solid #ddd' }}>{row.detail.item_name}</td>
                               <td style={{ padding: '6px', textAlign: 'right', border: '1px solid #ddd' }}>{row.detail.quantity}</td>
                               <td style={{ padding: '6px', textAlign: 'right', border: '1px solid #ddd' }}>
-                                {row.detail.selling_price?.toFixed(2) || '0.00'}
+                                {typeof row.detail.selling_price === 'number' ? row.detail.selling_price.toFixed(2) : parseFloat(row.detail.selling_price).toFixed(2) || '0.00'}
                               </td>
                               <td style={{ padding: '6px', border: '1px solid #ddd' }}>{row.detail.counterparty_name}</td>
                               <td style={{ padding: '6px', border: '1px solid #ddd' }}>{row.detail.supplier_name}</td>

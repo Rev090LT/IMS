@@ -1,10 +1,10 @@
 {
-  "name": "ims",
+  "name": "IMS",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.3",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --host=192.168.0.244",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview"

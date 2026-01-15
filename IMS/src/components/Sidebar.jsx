@@ -1,11 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom'; // <<<--- Импортируем для навигации
-import CarListModal from './CarListModal';
-import SoldPartsModal from './SoldPartsModal'; // <<<--- Импортируем модуль
 
-function Sidebar({ isOpen, onClose, onOpenSQLConsole, onOpenAddUserModal, onOpenAboutDeveloper, onOpenAddManufacturerModal, onOpenAddCategoryModal, onOpenNodeLogConsole, userRole }) {
+function Sidebar({ isOpen, onClose, onOpenSQLConsole, onOpenNodeLogConsole, onOpenAddUserModal, onOpenAboutDeveloper, onOpenAddManufacturerModal, onOpenAddCategoryModal, userRole }) {
   const [showCarListModal, setShowCarListModal] = useState(false);
-  const [showSoldPartsModal, setShowSoldPartsModal] = useState(false); // <<<--- Новое состояние
+  const [showSoldPartsModal, setShowSoldPartsModal] = useState(false);
   const navigate = useNavigate(); // <<<--- Хук для навигации
   const isAdmin = userRole === 'admin';
 
@@ -17,12 +15,18 @@ function Sidebar({ isOpen, onClose, onOpenSQLConsole, onOpenAddUserModal, onOpen
     setShowCarListModal(false);
   };
 
-  const openSoldPartsModal = () => { // <<<--- Новая функция
+  const openSoldPartsModal = () => {
     setShowSoldPartsModal(true);
   };
 
-  const closeSoldPartsModal = () => { // <<<--- Новая функция
+  const closeSoldPartsModal = () => {
     setShowSoldPartsModal(false);
+  };
+
+  // <<<--- Функция для перехода на страницу администрирования --->
+  const goToAdminPanel = () => {
+    navigate('/admin-panel');
+    onClose();
   };
 
   // <<<--- Функция для перехода на страницу документооборота --->
@@ -67,26 +71,8 @@ function Sidebar({ isOpen, onClose, onOpenSQLConsole, onOpenAddUserModal, onOpen
         }}
       >
         <div style={{ padding: '20px', paddingTop: '60px' }}>
-          <h3>Меню админа</h3>
+          <h3>Меню подсистем</h3>
           <ul style={{ listStyleType: 'none', padding: 0 }}>
-            <li style={{ marginBottom: '20px' }}>
-              <a
-                href="#!"
-                onClick={(e) => {
-                  e.preventDefault();
-                  if (onOpenAboutDeveloper) onOpenAboutDeveloper();
-                  onClose();
-                }}
-                style={{ color: 'white', textDecoration: 'none', fontSize: '16px', cursor: 'pointer' }}
-              >
-                О разработчике
-              </a>
-            </li>
-            <li style={{ marginBottom: '20px' }}>
-              <a href="#!" style={{ color: 'white', textDecoration: 'none', fontSize: '16px' }} onClick={(e) => e.preventDefault()}>
-                Настройки
-              </a>
-            </li>
             <li style={{ marginBottom: '20px' }}>
               <a
                 href="#!"
@@ -118,19 +104,6 @@ function Sidebar({ isOpen, onClose, onOpenSQLConsole, onOpenAddUserModal, onOpen
                 href="#!"
                 onClick={(e) => {
                   e.preventDefault();
-                  if (onOpenNodeLogConsole) onOpenNodeLogConsole();
-                  onClose();
-                }}
-                style={{ color: 'white', textDecoration: 'none', fontSize: '16px', cursor: 'pointer' }}
-              >
-                Node.js Log Console
-              </a>
-            </li>
-            <li style={{ marginBottom: '20px' }}>
-              <a
-                href="#!"
-                onClick={(e) => {
-                  e.preventDefault();
                   openCarListModal();
                   onClose();
                 }}
@@ -144,11 +117,25 @@ function Sidebar({ isOpen, onClose, onOpenSQLConsole, onOpenAddUserModal, onOpen
                 href="#!"
                 onClick={(e) => {
                   e.preventDefault();
-                  goToDocumentFlow(); // <<<--- Переход на страницу документооборота
+                  openSoldPartsModal();
+                  onClose();
                 }}
                 style={{ color: 'white', textDecoration: 'none', fontSize: '16px', cursor: 'pointer' }}
               >
-                Документооборот
+                Проданные запчасти
+              </a>
+            </li>
+            <li style={{ marginBottom: '20px' }}>
+              <a
+                href="#!"
+                onClick={(e) => {
+                  e.preventDefault();
+                  if (onOpenAboutDeveloper) onOpenAboutDeveloper();
+                  onClose();
+                }}
+                style={{ color: 'white', textDecoration: 'none', fontSize: '16px', cursor: 'pointer' }}
+              >
+                О разработчике
               </a>
             </li>
             {isAdmin && (
@@ -158,27 +145,25 @@ function Sidebar({ isOpen, onClose, onOpenSQLConsole, onOpenAddUserModal, onOpen
                     href="#!"
                     onClick={(e) => {
                       e.preventDefault();
-                      if (onOpenSQLConsole) onOpenSQLConsole();
-                      onClose();
+                      goToAdminPanel(); // <<<--- Переход на /admin-panel
                     }}
                     style={{ color: 'white', textDecoration: 'none', fontSize: '16px', cursor: 'pointer' }}
                   >
-                    SQL Консоль
+                    Администрирование
                   </a>
                 </li>
                 <li style={{ marginBottom: '20px' }}>
-                  <a
-                    href="#!"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      if (onOpenAddUserModal) onOpenAddUserModal();
-                      onClose();
-                    }}
-                    style={{ color: 'white', textDecoration: 'none', fontSize: '16px', cursor: 'pointer' }}
-                  >
-                    Добавить пользователя
-                  </a>
-                </li>
+                <a
+                  href="#!"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    goToDocumentFlow(); // <<<--- Переход на /document-flow
+                  }}
+                  style={{ color: 'white', textDecoration: 'none', fontSize: '16px', cursor: 'pointer' }}
+                >
+                  Документооборот
+                </a>
+            </li>
               </>
             )}
           </ul>

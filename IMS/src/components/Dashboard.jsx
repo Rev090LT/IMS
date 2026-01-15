@@ -9,7 +9,7 @@ import AddItemModal from './AddItemModal';
 import AddLocationModal from './AddLocationModal';
 import MovementHistoryModal from './MovementHistoryModal';
 import PrintLabelModal from './PrintLabelModal';
-import SellPartModal from './SellPartModal'; // <<<--- Импортируем модуль
+import SellPartModal from './SellPartModal';
 import Sidebar from './Sidebar';
 import SQLConsole from './SQLConsole';
 import AddUserModal from './AddUserModal';
@@ -18,7 +18,7 @@ import AddManufacturerModal from './AddManufacturerModal';
 import AddCategoryModal from './AddCategoryModal';
 import AddCarModal from './AddCarModal';
 import NodeLogConsole from './NodeLogConsole';
-import backgroundImage from './tracktime.jpg'
+import backgroundImage from './tracktime.jpg'; // <<<--- Импортируем картинку
 
 function Dashboard() {
   const [userInfo, setUserInfo] = useState(null);
@@ -30,7 +30,7 @@ function Dashboard() {
   const [addManufacturerModalOpen, setAddManufacturerModalOpen] = useState(false);
   const [addCategoryModalOpen, setAddCategoryModalOpen] = useState(false);
   const [addCarModalOpen, setAddCarModalOpen] = useState(false);
-  const [sellPartModalOpen, setSellPartModalOpen] = useState(false); // <<<--- Новое состояние
+  const [sellPartModalOpen, setSellPartModalOpen] = useState(false);
   const [nodeLogConsoleOpen, setNodeLogConsoleOpen] = useState(false);
   const token = localStorage.getItem('token');
 
@@ -105,11 +105,11 @@ function Dashboard() {
     setAddCarModalOpen(false);
   };
 
-  const openSellPartModal = () => { // <<<--- Новая функция
+  const openSellPartModal = () => {
     setSellPartModalOpen(true);
   };
 
-  const closeSellPartModal = () => { // <<<--- Новая функция
+  const closeSellPartModal = () => {
     setSellPartModalOpen(false);
   };
 
@@ -133,8 +133,10 @@ function Dashboard() {
 
   return (
     <div style={{
-      backgroundImage: "url(" + { backgroundImage } + ")",
+      backgroundImage: `url(${backgroundImage})`, // <<<--- Вот тут исправили
+      backgroundSize: 'cover',
       backgroundPosition: 'center',
+      backgroundRepeat: 'no-repeat',
       minHeight: '100vh',
       margin: 0,
       padding: 0,
@@ -312,10 +314,10 @@ function Dashboard() {
             <div className="dashboard-buttons-grid dashboard-grid-one">
               <div className="dashboard-button-container">
                 <button
-                  onClick={openSellPartModal} // <<<--- Новая кнопка
+                  onClick={openSellPartModal}
                   className="dashboard-button dashboard-button-sell-part"
                   style={{
-                    backgroundColor: '#e74c3c', // <<<--- Красный цвет
+                    backgroundColor: '#e74c3c',
                     color: 'white',
                   }}
                 >
@@ -347,7 +349,7 @@ function Dashboard() {
         {activeModal === 'history' && <MovementHistoryModal onClose={() => setActiveModal(null)} token={token} />}
         {activeModal === 'printLabel' && <PrintLabelModal onClose={() => setActiveModal(null)} token={token} />}
         {addCarModalOpen && <AddCarModal onClose={closeAddCarModal} token={token} />}
-        {sellPartModalOpen && <SellPartModal onClose={closeSellPartModal} token={token} />} {/* <<<--- Новое модальное окно --- */}
+        {sellPartModalOpen && <SellPartModal onClose={closeSellPartModal} token={token} />}
         {sqlConsoleOpen && <SQLConsole onClose={closeSQLConsole} />}
         {addUserModalOpen && <AddUserModal onClose={closeAddUserModal} />}
         {aboutDeveloperOpen && <AboutDeveloper onClose={closeAboutDeveloper} />}
