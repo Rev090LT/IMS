@@ -25,17 +25,50 @@ export const getItemByQR = (qrCode, token) => {
 export const scanItem = getItemByQR;
 
 // === Перемещение товара ===
-export const moveItem = (data, token) => {
-  return fetch(`${API_BASE}/items/move`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`,
-    },
-    body: JSON.stringify(data),
-  });
-};
+export const moveItem = async ({ qr_code, from_location_id, to_location_id, quantity }, token) => {
+  try {
+    const response = await fetch(`${API_BASE}/items/move`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        qr_code,
+        from_location_id,
+        to_location_id,
+        quantity,
+      }),
+    });
 
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return response;
+  } catch (error) {
+    console.error('Error moving item:', error);
+    throw error;
+  }
+};
+export const getItemByName = async (name, token) => {
+  try {
+    const response = await fetch(`${API_BASE}/items/name?name=${encodeURIComponent(name)}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return response;
+  } catch (error) {
+    console.error('Error fetching item by name:', error);
+    throw error;
+  }
+};
 // === Списание товара ===
 export const disposeItem = (data, token) => {
   return fetch(`${API_BASE}/items/dispose`, {
@@ -71,13 +104,23 @@ export const createItem = (data, token) => {
 };
 
 // === Получить все локации ===
-export const getAllLocations = (token) => {
-  console.log('Fetching locations with token:', token);
-  return fetch(`${API_BASE}/locations`, { // или /locations, если вы перенесли маршрут
-    headers: {
-      'Authorization': `Bearer ${token}`,
-    },
-  });
+export const getAllLocations = async (token) => {
+  try {
+    const response = await fetch(`${API_BASE}/locations`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return response;
+  } catch (error) {
+    console.error('Error fetching locations:', error);
+    throw error;
+  }
 };
 
 export const createLocation = (data, token) => {

@@ -223,10 +223,22 @@ function DocumentFlowPage({ token }) {
   ]);
 
   return (
-    <div style={{ padding: '20px', fontFamily: 'Arial, sans-serif' }} ref={componentRef}>
+    <div style={{
+      padding: '20px',
+      fontFamily: 'Arial, sans-serif',
+      maxWidth: '100vw',
+      overflowX: 'auto',
+    }} ref={componentRef}>
       <h2 style={{ marginBottom: '20px' }}>Документооборот</h2>
 
-      <div style={{ marginBottom: '20px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+      {/* Мобильная версия */}
+      <div style={{
+        display: 'flex',
+        gap: '10px',
+        flexWrap: 'wrap',
+        marginBottom: '20px',
+        justifyContent: 'center',
+      }}>
         <button
           onClick={() => setActiveTab('soldParts')}
           style={{
@@ -237,6 +249,8 @@ function DocumentFlowPage({ token }) {
             cursor: 'pointer',
             color: activeTab === 'soldParts' ? 'white' : 'black',
             fontWeight: 'bold',
+            fontSize: '14px',
+            minWidth: '120px',
           }}
         >
           Проданные запчасти
@@ -251,6 +265,8 @@ function DocumentFlowPage({ token }) {
             cursor: 'pointer',
             color: activeTab === 'counterparties' ? 'white' : 'black',
             fontWeight: 'bold',
+            fontSize: '14px',
+            minWidth: '120px',
           }}
         >
           Контрагенты
@@ -265,6 +281,8 @@ function DocumentFlowPage({ token }) {
             cursor: 'pointer',
             color: activeTab === 'suppliers' ? 'white' : 'black',
             fontWeight: 'bold',
+            fontSize: '14px',
+            minWidth: '120px',
           }}
         >
           Поставщики
@@ -279,6 +297,8 @@ function DocumentFlowPage({ token }) {
             cursor: 'pointer',
             color: activeTab === 'cars' ? 'white' : 'black',
             fontWeight: 'bold',
+            fontSize: '14px',
+            minWidth: '120px',
           }}
         >
           Автомобили в разборе
@@ -293,6 +313,8 @@ function DocumentFlowPage({ token }) {
             cursor: 'pointer',
             color: activeTab === 'income' ? 'white' : 'black',
             fontWeight: 'bold',
+            fontSize: '14px',
+            minWidth: '120px',
           }}
         >
           Доходы с запчастей
@@ -300,7 +322,13 @@ function DocumentFlowPage({ token }) {
       </div>
 
       {/* Кнопки управления */}
-      <div style={{ marginBottom: '20px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+      <div style={{
+        marginBottom: '20px',
+        display: 'flex',
+        gap: '10px',
+        flexWrap: 'wrap',
+        justifyContent: 'center',
+      }}>
         <button
           onClick={() => navigate('/dashboard')}
           style={{
@@ -310,6 +338,7 @@ function DocumentFlowPage({ token }) {
             border: 'none',
             borderRadius: '4px',
             cursor: 'pointer',
+            fontSize: '14px',
           }}
         >
           ← Вернуться в Dashboard
@@ -325,6 +354,7 @@ function DocumentFlowPage({ token }) {
                 border: 'none',
                 borderRadius: '4px',
                 cursor: 'pointer',
+                fontSize: '14px',
               }}
             >
               Экспорт в Excel
@@ -338,6 +368,7 @@ function DocumentFlowPage({ token }) {
                 border: 'none',
                 borderRadius: '4px',
                 cursor: 'pointer',
+                fontSize: '14px',
               }}
             >
               Экспорт в PDF
@@ -348,16 +379,28 @@ function DocumentFlowPage({ token }) {
 
       {/* Фильтр по дате для доходов */}
       {activeTab === 'income' && (
-        <div style={{ marginBottom: '20px', padding: '10px', backgroundColor: '#f8f9fa', borderRadius: '4px' }}>
+        <div style={{
+          marginBottom: '20px',
+          padding: '10px',
+          backgroundColor: '#f8f9fa',
+          borderRadius: '4px',
+          textAlign: 'center',
+        }}>
           <h4>Фильтр по дате</h4>
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap' }}>
             <label>
               С:
               <input
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                style={{ marginLeft: '5px', padding: '4px', borderRadius: '4px', border: '1px solid #ccc' }}
+                style={{
+                  marginLeft: '5px',
+                  padding: '4px',
+                  borderRadius: '4px',
+                  border: '1px solid #ccc',
+                  fontSize: '14px',
+                }}
               />
             </label>
             <label>
@@ -366,96 +409,114 @@ function DocumentFlowPage({ token }) {
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                style={{ marginLeft: '5px', padding: '4px', borderRadius: '4px', border: '1px solid #ccc' }}
+                style={{
+                  marginLeft: '5px',
+                  padding: '4px',
+                  borderRadius: '4px',
+                  border: '1px solid #ccc',
+                  fontSize: '14px',
+                }}
               />
             </label>
           </div>
         </div>
       )}
-
-      {/* Таблица проданных запчастей */}
       {activeTab === 'soldParts' && (
         <div>
           <h3 style={{ marginBottom: '10px' }}>Проданные запчасти</h3>
-          <table style={{
-            width: '100%',
-            borderCollapse: 'collapse',
-            fontSize: '14px',
-            boxShadow: '0 2px 5px rgba(0,0,0,0.1)',
-            borderRadius: '8px',
-            overflow: 'hidden',
+          <div style={{
+            transform: 'scale(0.8)',
+            transformOrigin: 'top left',
+            width: '125%',
+            overflowX: 'auto',
           }}>
-            <thead>
-              <tr style={{ backgroundColor: '#ecf0f1', fontWeight: 'bold' }}>
-                <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>ID</th>
-                <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>Наименование</th>
-                <th style={{ padding: '8px', textAlign: 'right', border: '1px solid #bdc3c7' }}>Количество</th>
-                <th style={{ padding: '8px', textAlign: 'right', border: '1px solid #bdc3c7' }}>Цена</th>
-                <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>Дата продажи</th>
-                <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>Покупатель</th>
-                <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>Поставщик</th>
-              </tr>
-            </thead>
-            <tbody>
-              {soldParts.map(part => (
-                <tr key={part.id} style={{ backgroundColor: part.id % 2 === 0 ? '#f9f9f9' : 'white' }}>
-                  <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>{part.item_id}</td>
-                  <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>{part.item_name}</td>
-                  <td style={{ padding: '8px', textAlign: 'right', border: '1px solid #bdc3c7' }}>{part.quantity}</td>
-                  <td style={{ padding: '8px', textAlign: 'right', border: '1px solid #bdc3c7' }}>
-                    {part.selling_price != null ? parseFloat(part.selling_price).toFixed(2) : '0.00'}
-                  </td>
-                  <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>
-                    {part.sale_date ? new Date(part.sale_date).toLocaleDateString('ru-RU') : 'Нет даты'} {/* <<<--- Вот тут исправили дату */}
-                  </td>
-                  <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>
-                    {counterparties.find(cp => cp.id === part.counterparty_id)?.fio || counterparties.find(cp => cp.id === part.counterparty_id)?.company_name || '-'} {/* <<<--- Покупатель текстом */}
-                  </td>
-                  <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>
-                    {suppliers.find(s => s.id === part.supplier_id)?.name || '-'} {/* <<<--- Поставщик текстом */}
-                  </td>
+            <table style={{
+              width: '100%',
+              borderCollapse: 'collapse',
+              fontSize: '12px',
+            }}>
+              <thead>
+                <tr style={{ backgroundColor: '#ecf0f1', fontWeight: 'bold' }}>
+                  <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>ID</th>
+                  <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>Наименование</th>
+                  <th style={{ padding: '8px', textAlign: 'right', border: '1px solid #bdc3c7' }}>Количество</th>
+                  <th style={{ padding: '8px', textAlign: 'right', border: '1px solid #bdc3c7' }}>Цена</th>
+                  <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>Дата продажи</th>
+                  <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>Покупатель</th>
+                  <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>Поставщик</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {soldParts.map(part => {
+                  // <<<--- Находим покупателя --->
+                  const counterparty = counterparties.find(cp => cp.id === part.counterparty_id);
+                  // <<<--- Находим поставщика --->
+                  const supplier = suppliers.find(s => s.id === part.supplier_id);
+
+                  return (
+                    <tr key={part.id} style={{ backgroundColor: part.id % 2 === 0 ? '#f9f9f9' : 'white' }}>
+                      <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>{part.item_id}</td>
+                      <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>{part.item_name}</td>
+                      <td style={{ padding: '8px', textAlign: 'right', border: '1px solid #bdc3c7' }}>{part.quantity}</td>
+                      <td style={{ padding: '8px', textAlign: 'right', border: '1px solid #bdc3c7' }}>
+                        {part.selling_price != null ? parseFloat(part.selling_price).toFixed(2) : '0.00'}
+                      </td>
+                      <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>
+                        {part.sale_date ? new Date(part.sale_date).toLocaleDateString('ru-RU') : 'Нет даты'}
+                      </td>
+                      <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>
+                        {counterparty ? (counterparty.type === 'legal' ? counterparty.company_name : counterparty.fio) : '-'}
+                      </td>
+                      <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>
+                        {supplier ? supplier.name : '-'}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
-
       {/* Таблица контрагентов */}
       {activeTab === 'counterparties' && (
         <div>
           <h3 style={{ marginBottom: '10px' }}>Контрагенты</h3>
-          <table style={{
-            width: '100%',
-            borderCollapse: 'collapse',
-            fontSize: '14px',
-            boxShadow: '0 2px 5px rgba(0,0,0,0.1)',
-            borderRadius: '8px',
-            overflow: 'hidden',
+          <div style={{
+            transform: 'scale(0.8)',
+            transformOrigin: 'top left',
+            width: '125%',
+            overflowX: 'auto',
           }}>
-            <thead>
-              <tr style={{ backgroundColor: '#ecf0f1', fontWeight: 'bold' }}>
-                <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>ID</th>
-                <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>Тип</th>
-                <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>ФИО/Название</th>
-                <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>ИНН</th>
-                <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>Телефон</th>
-                <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>Адрес</th>
-              </tr>
-            </thead>
-            <tbody>
-              {counterparties.map(cp => (
-                <tr key={cp.id} style={{ backgroundColor: cp.id % 2 === 0 ? '#f9f9f9' : 'white' }}>
-                  <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>{cp.id}</td>
-                  <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>{cp.type}</td>
-                  <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>{cp.type === 'legal' ? cp.company_name : cp.fio}</td>
-                  <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>{cp.inn || '-'}</td>
-                  <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>{cp.phone || '-'}</td>
-                  <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>{cp.legal_address || cp.address || '-'}</td>
+            <table style={{
+              width: '100%',
+              borderCollapse: 'collapse',
+              fontSize: '12px',
+            }}>
+              <thead>
+                <tr style={{ backgroundColor: '#ecf0f1', fontWeight: 'bold' }}>
+                  <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>ID</th>
+                  <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>Тип</th>
+                  <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>ФИО/Название</th>
+                  <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>ИНН</th>
+                  <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>Телефон</th>
+                  <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>Адрес</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {counterparties.map(cp => (
+                  <tr key={cp.id} style={{ backgroundColor: cp.id % 2 === 0 ? '#f9f9f9' : 'white' }}>
+                    <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>{cp.id}</td>
+                    <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>{cp.type}</td>
+                    <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>{cp.type === 'legal' ? cp.company_name : cp.fio}</td>
+                    <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>{cp.inn || '-'}</td>
+                    <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>{cp.phone || '-'}</td>
+                    <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>{cp.legal_address || cp.address || '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -463,39 +524,43 @@ function DocumentFlowPage({ token }) {
       {activeTab === 'suppliers' && (
         <div>
           <h3 style={{ marginBottom: '10px' }}>Поставщики</h3>
-          <table style={{
-            width: '100%',
-            borderCollapse: 'collapse',
-            fontSize: '14px',
-            boxShadow: '0 2px 5px rgba(0,0,0,0.1)',
-            borderRadius: '8px',
-            overflow: 'hidden',
+          <div style={{
+            transform: 'scale(0.8)',
+            transformOrigin: 'top left',
+            width: '125%',
+            overflowX: 'auto',
           }}>
-            <thead>
-              <tr style={{ backgroundColor: '#ecf0f1', fontWeight: 'bold' }}>
-                <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>ID</th>
-                <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>Название</th>
-                <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>ИНН</th>
-                <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>ОГРН</th>
-                <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>КПП</th>
-                <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>Юр. адрес</th>
-                <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>Факт. адрес</th>
-              </tr>
-            </thead>
-            <tbody>
-              {suppliers.map(supplier => (
-                <tr key={supplier.id} style={{ backgroundColor: supplier.id % 2 === 0 ? '#f9f9f9' : 'white' }}>
-                  <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>{supplier.id}</td>
-                  <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>{supplier.name}</td>
-                  <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>{supplier.inn}</td>
-                  <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>{supplier.ogrn || '-'}</td>
-                  <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>{supplier.kpp || '-'}</td>
-                  <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>{supplier.legal_address || '-'}</td>
-                  <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>{supplier.actual_address || '-'}</td>
+            <table style={{
+              width: '100%',
+              borderCollapse: 'collapse',
+              fontSize: '12px',
+            }}>
+              <thead>
+                <tr style={{ backgroundColor: '#ecf0f1', fontWeight: 'bold' }}>
+                  <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>ID</th>
+                  <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>Название</th>
+                  <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>ИНН</th>
+                  <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>ОГРН</th>
+                  <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>КПП</th>
+                  <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>Юр. адрес</th>
+                  <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>Факт. адрес</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {suppliers.map(supplier => (
+                  <tr key={supplier.id} style={{ backgroundColor: supplier.id % 2 === 0 ? '#f9f9f9' : 'white' }}>
+                    <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>{supplier.id}</td>
+                    <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>{supplier.name}</td>
+                    <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>{supplier.inn}</td>
+                    <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>{supplier.ogrn || '-'}</td>
+                    <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>{supplier.kpp || '-'}</td>
+                    <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>{supplier.legal_address || '-'}</td>
+                    <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>{supplier.actual_address || '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -503,83 +568,95 @@ function DocumentFlowPage({ token }) {
       {activeTab === 'cars' && (
         <div>
           <h3 style={{ marginBottom: '10px' }}>Автомобили в разборе</h3>
-          <table style={{
-            width: '100%',
-            borderCollapse: 'collapse',
-            fontSize: '14px',
-            boxShadow: '0 2px 5px rgba(0,0,0,0.1)',
-            borderRadius: '8px',
-            overflow: 'hidden',
+          <div style={{
+            transform: 'scale(0.8)',
+            transformOrigin: 'top left',
+            width: '125%',
+            overflowX: 'auto',
           }}>
-            <thead>
-              <tr style={{ backgroundColor: '#ecf0f1', fontWeight: 'bold' }}>
-                <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>ID</th>
-                <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>Марка</th>
-                <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>Модель</th>
-                <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>VIN</th>
-                <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>Год</th>
-                <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>Дата прибытия</th>
-                <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>Действия</th>
-              </tr>
-            </thead>
-            <tbody>
-              {cars.map(car => (
-                <tr key={car.id} style={{ backgroundColor: car.id % 2 === 0 ? '#f9f9f9' : 'white' }}>
-                  <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>{car.id}</td>
-                  <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>{car.brand}</td>
-                  <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>{car.model}</td>
-                  <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>{car.vin}</td>
-                  <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>{car.year || '-'}</td>
-                  <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>{car.arrival_date}</td>
-                  <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>
-                    <button
-                      onClick={() => {
-                        alert(`Редактировать автомобиль ID: ${car.id}`);
-                      }}
-                      style={{
-                        padding: '4px 8px',
-                        backgroundColor: '#3498db',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontSize: '12px',
-                      }}
-                    >
-                      Редактировать
-                    </button>
-                  </td>
+            <table style={{
+              width: '100%',
+              borderCollapse: 'collapse',
+              fontSize: '12px',
+            }}>
+              <thead>
+                <tr style={{ backgroundColor: '#ecf0f1', fontWeight: 'bold' }}>
+                  <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>ID</th>
+                  <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>Марка</th>
+                  <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>Модель</th>
+                  <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>VIN</th>
+                  <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>Год</th>
+                  <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>Дата прибытия</th>
+                  <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>Действия</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {cars.map(car => (
+                  <tr key={car.id} style={{ backgroundColor: car.id % 2 === 0 ? '#f9f9f9' : 'white' }}>
+                    <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>{car.id}</td>
+                    <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>{car.brand}</td>
+                    <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>{car.model}</td>
+                    <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>{car.vin}</td>
+                    <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>{car.year || '-'}</td>
+                    <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>{car.arrival_date}</td>
+                    <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>
+                      <button
+                        onClick={() => {
+                          alert(`Редактировать автомобиль ID: ${car.id}`);
+                        }}
+                        style={{
+                          padding: '4px 8px',
+                          backgroundColor: '#3498db',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontSize: '12px',
+                        }}
+                      >
+                        Редактировать
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
-
-      {/* Таблица доходов с запчастей */}
       {activeTab === 'income' && (
         <div>
           <h3 style={{ marginBottom: '10px' }}>Доходы с запчастей</h3>
-          <div style={{ marginBottom: '20px', padding: '10px', backgroundColor: '#e8f4fd', borderRadius: '4px' }}>
-            <p style={{ margin: '5px 0' }}><strong>Общая выручка:</strong> {typeof incomeSummary.total === 'number' ? incomeSummary.total.toFixed(2) : parseFloat(incomeSummary.total).toFixed(2) || '0.00'} руб</p>
-            <p style={{ margin: '5px 0' }}><strong>Количество продаж:</strong> {typeof incomeSummary.count === 'number' ? incomeSummary.count : parseInt(incomeSummary.count) || 0}</p>
-          </div>
-          <table style={{
-            width: '100%',
-            borderCollapse: 'collapse',
-            fontSize: '14px',
-            boxShadow: '0 2px 5px rgba(0,0,0,0.1)',
-            borderRadius: '8px',
-            overflow: 'hidden',
+          <div style={{
+            marginBottom: '20px',
+            padding: '10px',
+            backgroundColor: '#e8f4fd',
+            borderRadius: '4px',
+            textAlign: 'center',
           }}>
-            <thead>
-              <tr style={{ backgroundColor: '#ecf0f1', fontWeight: 'bold' }}>
-                <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>Дата продажи</th>
-                <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>Количество продаж</th>
-                <th style={{ padding: '8px', textAlign: 'right', border: '1px solid #bdc3c7' }}>Выручка</th>
-              </tr>
-            </thead>
-            <tbody>
+            <p style={{ margin: '5px 0' }}><strong>Общая выручка:</strong> {(incomeSummary.total).toFixed(2)} руб</p>
+            <p style={{ margin: '5px 0' }}><strong>Количество продаж:</strong> {incomeSummary.count}</p>
+          </div>
+          <div style={{
+            transform: 'scale(0.8)',
+            transformOrigin: 'top left',
+            width: '125%',
+            overflowX: 'auto',
+          }}>
+            <table style={{
+              width: '100%',
+              borderCollapse: 'collapse',
+              fontSize: '12px',
+            }}>
+              <thead>
+                <tr style={{ backgroundColor: '#ecf0f1', fontWeight: 'bold' }}>
+                  <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>Дата продажи</th>
+                  <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>Количество продаж</th>
+                  <th style={{ padding: '8px', textAlign: 'right', border: '1px solid #bdc3c7' }}>Выручка</th>
+                </tr>
+              </thead>
+              <tbody>
+
               {flattenedIncomeRows.map((row) => (
                 row.type === 'summary' ? (
                   <tr key={row.key} style={{ backgroundColor: row.date % 2 === 0 ? '#f9f9f9' : 'white' }}>
@@ -629,9 +706,10 @@ function DocumentFlowPage({ token }) {
                     </td>
                   </tr>
                 )
-              ))}
-            </tbody>
-          </table>
+              ))}               
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

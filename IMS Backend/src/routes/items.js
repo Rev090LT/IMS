@@ -8,6 +8,14 @@ const router = express.Router();
 // <<<--- Маршрут для получения списка автомобилей --->
 // <<<--- Обновим GET /api/cars --->
 // В GET /api/items/cars
+// IMS Backend/routes/items.js
+
+// ... (все остальные импорты)
+
+// <<<--- Маршрут для получения товара по имени --->
+
+
+
 router.get('/cars', authenticateToken, async (req, res) => {
   try {
     // <<<--- Явно конвертий дату в строку формата YYYY-MM-DD --->
@@ -279,7 +287,28 @@ router.get('/', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+router.get('/name', authenticateToken, async (req, res) => {
+  const { name } = req.query;
 
+  if (!name) {
+    return res.status(400).json({ error: 'Name parameter is required' });
+  }
+
+  try {
+    // <<<--- Проверим, что в базе есть товары с таким именем --->
+    const result = await pool.query(
+      `SELECT id, qr_code, name FROM items WHERE name ILIKE $1 LIMIT 10`,
+      [`%${name}%`]
+    );
+
+    console.log('Search results for name:', name, result.rows); // <<<--- Лог для отладки
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Error fetching item by name:', err);
+    res.status(500).json({ error: 'Failed to fetch item by name' });
+  }
+});
 // <<<--- Обновим маршрут POST / --->
 router.post('/', authenticateToken, async (req, res) => {
   // <<<--- Добавим новые поля в деструктуризацию --->

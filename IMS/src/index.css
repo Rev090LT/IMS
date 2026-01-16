@@ -24,12 +24,3 @@ body {
   padding: 20px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
 }
-.dashboard-layout {
-  display: flex;
-  min-height: 100vh;
-  background-image: url('../src/components/tracktime.jpg'); 
-  background-size: contain;
-  background-position: center;
-  background-repeat: no-repeat;
-  background-attachment: fixed; /* <<<--- Фиксируем фон */
-}
