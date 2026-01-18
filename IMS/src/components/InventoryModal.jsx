@@ -85,31 +85,54 @@ function InventoryModal({ onClose, token }) {
   };
 
   // <<<--- Функция для удаления позиции --->
-  const handleDeleteItem = async (itemId) => {
-    if (!window.confirm('Вы уверены, что хотите удалить эту позицию?')) {
+// Внутри handleDeleteItem
+
+const handleDeleteItem = async (itemId) => {
+  if (!window.confirm('Вы уверены, что хотите удалить эту позицию?')) {
+    return;
+  }
+
+  try {
+    // <<<--- Проверим, продавалась ли позиция --->
+    const checkResponse = await fetch(`/api/items/${itemId}/is-sold`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      }
+    });
+
+    if (!checkResponse.ok) {
+      const errorData = await checkResponse.json();
+      throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+    }
+
+    const { isSold } = await checkResponse.json();
+
+    if (isSold) {
+      alert('Нельзя удалить позицию, которая уже продавалась');
       return;
     }
 
-    try {
-      const response = await fetch(`/api/items/${itemId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        }
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+    // <<<--- Если не продавалась, удаляем --->
+    const response = await fetch(`/api/items/${itemId}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${token}`,
       }
+    });
 
-      setItems(prev => prev.filter(item => item.id !== itemId));
-      alert('Позиция успешно удалена');
-    } catch (err) {
-      console.error('Error deleting item:', err);
-      alert(`Ошибка при удалении: ${err.message}`);
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
     }
-  };
+
+    // <<<--- Удаляем из состояния --->
+    setItems(prev => prev.filter(item => item.id !== itemId));
+    alert('Позиция успешно удалена');
+  } catch (err) {
+    console.error('Error deleting item:', err);
+    alert(`Ошибка при удалении: ${err.message}`);
+  }
+};
 
   if (loading) return <div>Loading...</div>;
 
@@ -305,7 +328,7 @@ function InventoryModal({ onClose, token }) {
                     <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>Производитель</th>
                     <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>Part Number</th>
                     <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>Модель машины</th>
-                    <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>VIN номер</th>
+                    <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>VIN номер (Frame)</th>
                     <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>Создано</th>
                     <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>Дата создания</th>
                     <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #bdc3c7' }}>Дата обновления</th>

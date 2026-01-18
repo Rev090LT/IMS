@@ -357,6 +357,23 @@ router.post('/', authenticateToken, async (req, res) => {
   }
 });
 
+// <<<--- Маршрут для проверки, продавалась ли позиция --->
+router.get('/:id/is-sold', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const result = await pool.query(
+      'SELECT EXISTS(SELECT 1 FROM sold_parts WHERE item_id = $1) AS is_sold',
+      [id]
+    );
+
+    res.json({ isSold: result.rows[0].is_sold });
+  } catch (err) {
+    console.error('Error checking if item is sold:', err);
+    res.status(500).json({ error: 'Failed to check if item is sold' });
+  }
+});
+
 router.get('/search-by-name/:name', authenticateToken, async (req, res) => {
   const { name } = req.params;
 
