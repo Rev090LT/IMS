@@ -1,20 +1,41 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import pool from './config/db.js'; // Добавим pool, т.к. он используется в /items/
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import pool from './config/db.js';
 import authRoutes from './routes/auth.js';
-import itemsRoutes from './routes/items.js'; // Убедитесь, что импортирован
-import locationsRoutes from './routes/locations.js'; // Убедитесь, что импортирован
+import itemsRoutes from './routes/items.js';
+import locationsRoutes from './routes/locations.js';
 import movementsRoutes from './routes/movements.js';
 import sqlRoutes from './routes/sql.js';
-import adminRoutes from './routes/admin.js'; // <= Импортируем новый маршрут
+import adminRoutes from './routes/admin.js';
 import lookupRoutes from './routes/lookup.js';
 import counterpartiesRouter from './routes/counterparties.js';
 import suppliersRouter from './routes/suppliers.js';
 import soldPartsRouter from './routes/sold-parts.js';
 import incomeSummaryRouter from './routes/income-summary.js';
+import addUserRouter from './routes/add-user.js';
 
 const app = express();
+
+// <<<--- Создадим папку logs, если её нет --->
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const logsDir = path.join(__dirname, 'logs');
+
+if (!fs.existsSync(logsDir)) {
+  fs.mkdirSync(logsDir, { recursive: true });
+  console.log('Created logs directory');
+}
+
+// <<<--- Создадим файл app.log, если его нет --->
+const logFilePath = path.join(logsDir, 'app.log');
+if (!fs.existsSync(logFilePath)) {
+  fs.writeFileSync(logFilePath, '', { flag: 'w' });
+  console.log('Created app.log file');
+}
 
 app.use(helmet());
 app.use(cors({
@@ -25,8 +46,8 @@ app.use(cors({
 app.use(express.json());
 
 app.use('/api/auth', authRoutes);
-app.use('/api/items', itemsRoutes); // Убедитесь, что этот маршрут подключён
-app.use('/api/locations', locationsRoutes); // И этот тоже
+app.use('/api/items', itemsRoutes);
+app.use('/api/locations', locationsRoutes);
 app.use('/api/sql', sqlRoutes);
 app.use('/api/movements', movementsRoutes);
 app.use('/api/admin', adminRoutes);
@@ -35,4 +56,25 @@ app.use('/api/counterparties', counterpartiesRouter);
 app.use('/api/suppliers', suppliersRouter);
 app.use('/api/sold-parts', soldPartsRouter);
 app.use('/api/income-summary', incomeSummaryRouter);
+app.use('/api/add-user', addUserRouter);
+
+// <<<--- Маршрут для получения логов --->
+app.get('/api/node-logs', (req, res) => {
+  try {
+    // <<<--- Проверим, существует ли файл --->
+    if (!fs.existsSync(logFilePath)) {
+      // <<<--- Если нет, создадим его --->
+      fs.writeFileSync(logFilePath, '', { flag: 'w' });
+    }
+
+    const data = fs.readFileSync(logFilePath, 'utf8');
+    const lines = data.split('\n').filter(line => line.trim() !== '').slice(-100); // последние 100 строк
+
+    res.json({ logs: lines });
+  } catch (err) {
+    console.error('Error reading log file:', err);
+    res.status(500).json({ error: 'Failed to read log file' });
+  }
+});
+
 export default app;

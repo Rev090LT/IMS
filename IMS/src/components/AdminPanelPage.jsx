@@ -1,16 +1,18 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-function AdminPanelPage({ token, onOpenAddUserModal }) { // <<<--- Теперь принимаем onOpenAddUserModal
+function AdminPanelPage({ token }) {
   const [activeSection, setActiveSection] = useState('sqlConsole');
   const [query, setQuery] = useState('');
   const [results, setResults] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [logs, setLogs] = useState([]);
+  const [logLoading, setLogLoading] = useState(true);
+  const [logError, setLogError] = useState('');
   const navigate = useNavigate();
   const textareaRef = useRef();
 
-  // <<<--- Функция для выполнения SQL-запроса --->
   const executeQuery = async () => {
     if (!query.trim()) {
       setError('Введите SQL-запрос');
@@ -46,17 +48,84 @@ function AdminPanelPage({ token, onOpenAddUserModal }) { // <<<--- Теперь 
     }
   };
 
+  const fetchLogs = async () => {
+    setLogLoading(true);
+    setLogError('');
+
+    try {
+      const response = await fetch('/api/node-logs', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        }
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setLogs(data.logs);
+    } catch (err) {
+      console.error('Node Logs Error:', err);
+      setLogError(err.message);
+    } finally {
+      setLogLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeSection === 'nodeLogConsole') {
+      fetchLogs();
+    }
+  }, [activeSection]);
+
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
       executeQuery();
     }
   };
 
+  const createUser = async (userData) => {
+    try {
+      const response = await fetch('/api/add-user', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(userData)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+      }
+
+      alert('Пользователь успешно создан');
+    } catch (err) {
+      console.error('Create User Error:', err);
+      alert(`Ошибка при создании пользователя: ${err.message}`);
+    }
+  };
+
+  const handleCreateUser = async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const userData = Object.fromEntries(formData.entries());
+
+    if (!userData.username || !userData.password || !userData.role) {
+      alert('Заполните все поля');
+      return;
+    }
+
+    await createUser(userData);
+  };
+
   return (
     <div style={{ padding: '20px', fontFamily: 'Arial, sans-serif' }}>
       <h2 style={{ marginBottom: '20px' }}>Администрирование</h2>
 
-      {/* Кнопка возврата в Dashboard */}
       <div style={{ marginBottom: '20px' }}>
         <button
           onClick={() => navigate('/dashboard')}
@@ -73,7 +142,6 @@ function AdminPanelPage({ token, onOpenAddUserModal }) { // <<<--- Теперь 
         </button>
       </div>
 
-      {/* Навигационные кнопки */}
       <div style={{ marginBottom: '20px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
         <button
           onClick={() => setActiveSection('sqlConsole')}
@@ -119,7 +187,6 @@ function AdminPanelPage({ token, onOpenAddUserModal }) { // <<<--- Теперь 
         </button>
       </div>
 
-      {/* Секция SQL Консоль */}
       {activeSection === 'sqlConsole' && (
         <div>
           <h3>SQL Консоль</h3>
@@ -225,19 +292,37 @@ function AdminPanelPage({ token, onOpenAddUserModal }) { // <<<--- Теперь 
         </div>
       )}
 
-      {/* Секция Node.js Log Console */}
       {activeSection === 'nodeLogConsole' && (
         <div>
           <h3>Node.js Log Console</h3>
           <div style={{ padding: '10px', backgroundColor: '#f8f9fa', borderRadius: '4px', marginBottom: '10px' }}>
             <p>Журнал событий Node.js:</p>
-            <pre style={{ backgroundColor: '#000', color: '#00ff00', padding: '10px', borderRadius: '4px', overflowX: 'auto', minHeight: '200px' }}>
-              [2026-01-16T10:00:00.000Z] INFO: Server started on port 3000
-              [2026-01-16T10:05:00.000Z] INFO: New connection from 127.0.0.1
-              [2026-01-16T10:10:00.000Z] ERROR: Database connection failed
-            </pre>
+            {logLoading ? (
+              <p>Загрузка логов...</p>
+            ) : logError ? (
+              <div style={{ color: 'red' }}>
+                {logError}
+              </div>
+            ) : (
+              <pre style={{
+                backgroundColor: '#000',
+                color: '#00ff00',
+                padding: '10px',
+                borderRadius: '4px',
+                overflowX: 'auto',
+                maxHeight: '400px',
+                fontSize: '12px',
+                lineHeight: '1.4',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-all',
+              }}>
+                {logs.map((log, index) => (
+                  <div key={index}>{log}</div>
+                ))}
+              </pre>
+            )}
             <button
-              onClick={() => alert('Обновление логов')}
+              onClick={fetchLogs}
               style={{
                 marginTop: '10px',
                 padding: '8px 16px',
@@ -254,30 +339,17 @@ function AdminPanelPage({ token, onOpenAddUserModal }) { // <<<--- Теперь 
         </div>
       )}
 
-      {/* Секция Создание пользователя */}
       {activeSection === 'addUser' && (
         <div>
           <h3>Создать пользователя</h3>
           <div style={{ padding: '10px', backgroundColor: '#f8f9fa', borderRadius: '4px' }}>
             <p>Введите данные нового пользователя:</p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxWidth: '400px' }}>
+            <form onSubmit={handleCreateUser} style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxWidth: '400px' }}>
               <label>
-                Имя:
+                Имя пользователя:
                 <input
                   type="text"
-                  placeholder="Иванов Иван Иванович"
-                  style={{
-                    width: '100%',
-                    padding: '8px',
-                    borderRadius: '4px',
-                    border: '1px solid #ccc',
-                  }}
-                />
-              </label>
-              <label>
-                Логин:
-                <input
-                  type="text"
+                  name="username"
                   placeholder="ivanov_ii"
                   style={{
                     width: '100%',
@@ -291,6 +363,7 @@ function AdminPanelPage({ token, onOpenAddUserModal }) { // <<<--- Теперь 
                 Пароль:
                 <input
                   type="password"
+                  name="password"
                   placeholder="••••••••"
                   style={{
                     width: '100%',
@@ -303,6 +376,7 @@ function AdminPanelPage({ token, onOpenAddUserModal }) { // <<<--- Теперь 
               <label>
                 Роль:
                 <select
+                  name="role"
                   style={{
                     width: '100%',
                     padding: '8px',
@@ -315,7 +389,7 @@ function AdminPanelPage({ token, onOpenAddUserModal }) { // <<<--- Теперь 
                 </select>
               </label>
               <button
-                onClick={onOpenAddUserModal} // <<<--- Вот тут вызываем переданную функцию
+                type="submit"
                 style={{
                   padding: '8px 16px',
                   backgroundColor: '#27ae60',
@@ -327,7 +401,7 @@ function AdminPanelPage({ token, onOpenAddUserModal }) { // <<<--- Теперь 
               >
                 Создать пользователя
               </button>
-            </div>
+            </form>
           </div>
         </div>
       )}

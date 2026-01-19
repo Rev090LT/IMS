@@ -104,19 +104,6 @@ function Sidebar({ isOpen, onClose, onOpenSQLConsole, onOpenNodeLogConsole, onOp
                 href="#!"
                 onClick={(e) => {
                   e.preventDefault();
-                  openCarListModal();
-                  onClose();
-                }}
-                style={{ color: 'white', textDecoration: 'none', fontSize: '16px', cursor: 'pointer' }}
-              >
-                Автомобили в разборе
-              </a>
-            </li>
-            <li style={{ marginBottom: '20px' }}>
-              <a
-                href="#!"
-                onClick={(e) => {
-                  e.preventDefault();
                   if (onOpenAboutDeveloper) onOpenAboutDeveloper();
                   onClose();
                 }}

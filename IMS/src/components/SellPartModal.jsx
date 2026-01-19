@@ -496,7 +496,7 @@ function SellPartModal({ onClose, token }) {
                         type="number"
                         value={item.quantity}
                         onChange={(e) => handleQuantityChange(item.id, e.target.value)}
-                        min="1"
+                        min=""
                         max={item.quantity}
                         style={{
                           width: '60px',

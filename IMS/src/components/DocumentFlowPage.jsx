@@ -16,57 +16,47 @@ function DocumentFlowPage({ token }) {
   const [endDate, setEndDate] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [editingCar, setEditingCar] = useState(null); // <<<--- Новое состояние для редактируемого автомобиля
   const navigate = useNavigate();
   const componentRef = useRef();
 
+  // <<<--- Загружаем все данные при монтировании компонента --->
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchAllData = async () => {
       try {
-        if (activeTab === 'soldParts') {
-          if (!token) throw new Error('No token provided for sold parts');
-          const response = await fetch('/api/sold-parts', {
-            headers: { 'Authorization': `Bearer ${token}` }
-          });
-          if (!response.ok) throw new Error(`Failed to fetch sold parts: ${response.status}`);
-          const data = await response.json();
-          setSoldParts(data);
-        } else if (activeTab === 'counterparties') {
-          if (!token) throw new Error('No token provided for counterparties');
-          const response = await fetch('/api/counterparties', {
-            headers: { 'Authorization': `Bearer ${token}` }
-          });
-          if (!response.ok) throw new Error(`Failed to fetch counterparties: ${response.status}`);
-          const data = await response.json();
-          setCounterparties(data);
-        } else if (activeTab === 'suppliers') {
-          if (!token) throw new Error('No token provided for suppliers');
-          const response = await fetch('/api/suppliers', {
-            headers: { 'Authorization': `Bearer ${token}` }
-          });
-          if (!response.ok) throw new Error(`Failed to fetch suppliers: ${response.status}`);
-          const data = await response.json();
-          setSuppliers(data);
-        } else if (activeTab === 'cars') {
-          if (!token) throw new Error('No token provided for cars');
-          const response = await fetch('/api/items/cars', {
-            headers: { 'Authorization': `Bearer ${token}` }
-          });
-          if (!response.ok) throw new Error(`Failed to fetch cars: ${response.status}`);
-          const data = await response.json();
-          setCars(data);
-        } else if (activeTab === 'income') {
-          if (!token) throw new Error('No token provided for income');
-          const response = await fetch('/api/income-summary', {
-            headers: { 'Authorization': `Bearer ${token}` }
-          });
-          if (!response.ok) throw new Error(`Failed to fetch income summary: ${response.status}`);
-          const data = await response.json();
-          console.log('Income Summary Data:', data);
-          setIncomeSummary(data);
-          setFilteredIncome(data.daily);
+        // <<<--- Загружаем все данные параллельно --->
+        const [soldPartsRes, counterpartiesRes, suppliersRes, carsRes, incomeRes] = await Promise.all([
+          fetch('/api/sold-parts', { headers: { 'Authorization': `Bearer ${token}` } }),
+          fetch('/api/counterparties', { headers: { 'Authorization': `Bearer ${token}` } }),
+          fetch('/api/suppliers', { headers: { 'Authorization': `Bearer ${token}` } }),
+          fetch('/api/items/cars', { headers: { 'Authorization': `Bearer ${token}` } }),
+          fetch('/api/income-summary', { headers: { 'Authorization': `Bearer ${token}` } })
+        ]);
+
+        // <<<--- Проверяем ответы --->
+        if (!soldPartsRes.ok || !counterpartiesRes.ok || !suppliersRes.ok || !carsRes.ok || !incomeRes.ok) {
+          throw new Error('Failed to fetch data');
         }
+
+        // <<<--- Преобразуем в JSON --->
+        const [soldPartsData, counterpartiesData, suppliersData, carsData, incomeData] = await Promise.all([
+          soldPartsRes.json(),
+          counterpartiesRes.json(),
+          suppliersRes.json(),
+          carsRes.json(),
+          incomeRes.json()
+        ]);
+
+        // <<<--- Устанавливаем состояние --->
+        setSoldParts(soldPartsData);
+        setCounterparties(counterpartiesData);
+        setSuppliers(suppliersData);
+        setCars(carsData);
+        setIncomeSummary(incomeData);
+        setFilteredIncome(incomeData.daily);
+
       } catch (err) {
-        console.error('Error in fetchData:', err);
+        console.error('Error in fetchAllData:', err);
         setError(err.message);
       } finally {
         setLoading(false);
@@ -74,10 +64,41 @@ function DocumentFlowPage({ token }) {
     };
 
     if (token) {
-      fetchData();
+      fetchAllData();
     } else {
       setError('No token provided');
       setLoading(false);
+    }
+  }, [token]); // <<<--- Только token в зависимостях
+
+  // <<<--- Обновляем данные при изменении activeTab (только для нужных вкладок) --->
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        if (activeTab === 'cars') {
+          const response = await fetch('/api/items/cars', {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (!response.ok) throw new Error(`Failed to fetch cars: ${response.status}`);
+          const data = await response.json();
+          setCars(data);
+        } else if (activeTab === 'income') {
+          const response = await fetch('/api/income-summary', {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (!response.ok) throw new Error(`Failed to fetch income summary: ${response.status}`);
+          const data = await response.json();
+          setIncomeSummary(data);
+          setFilteredIncome(data.daily);
+        }
+      } catch (err) {
+        console.error('Error in fetchData:', err);
+        setError(err.message);
+      }
+    };
+
+    if (token && (activeTab === 'cars' || activeTab === 'income')) {
+      fetchData();
     }
   }, [activeTab, token]);
 
@@ -202,6 +223,45 @@ function DocumentFlowPage({ token }) {
     doc.save(`${activeTab === 'soldParts' ? 'sold_parts' : 'income_summary'}.pdf`);
   };
 
+  // <<<--- Функция для открытия модального окна редактирования автомобиля --->
+  const openEditCarModal = (car) => {
+    setEditingCar(car);
+  };
+
+  // <<<--- Функция для закрытия модального окна редактирования автомобиля --->
+  const closeEditCarModal = () => {
+    setEditingCar(null);
+  };
+
+  // <<<--- Функция для сохранения изменений автомобиля --->
+  const saveEditedCar = async (e) => {
+    e.preventDefault();
+
+    try {
+      const response = await fetch(`/api/items/cars/${editingCar.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(editingCar)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+      }
+
+      // <<<--- Обновляем состояние --->
+      setCars(prev => prev.map(car => car.id === editingCar.id ? editingCar : car));
+      alert('Изменения сохранены');
+      closeEditCarModal();
+    } catch (err) {
+      console.error('Error updating car:', err);
+      alert(`Ошибка при сохранении: ${err.message}`);
+    }
+  };
+
   if (!token) return <div>No token provided</div>;
   if (loading) return <div>Loading...</div>;
   if (error) return <div>Error: {error}</div>;
@@ -317,7 +377,7 @@ function DocumentFlowPage({ token }) {
             minWidth: '120px',
           }}
         >
-          Доходы с запчастей
+          Доход с продаж
         </button>
       </div>
 
@@ -601,9 +661,7 @@ function DocumentFlowPage({ token }) {
                     <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>{car.arrival_date}</td>
                     <td style={{ padding: '8px', border: '1px solid #bdc3c7' }}>
                       <button
-                        onClick={() => {
-                          alert(`Редактировать автомобиль ID: ${car.id}`);
-                        }}
+                        onClick={() => openEditCarModal(car)} // <<<--- Открываем модальное окно
                         style={{
                           padding: '4px 8px',
                           backgroundColor: '#3498db',
@@ -626,7 +684,7 @@ function DocumentFlowPage({ token }) {
       )}
       {activeTab === 'income' && (
         <div>
-          <h3 style={{ marginBottom: '10px' }}>Доходы с запчастей</h3>
+          <h3 style={{ marginBottom: '10px' }}>Доход с продаж</h3>
           <div style={{
             marginBottom: '20px',
             padding: '10px',
@@ -709,6 +767,175 @@ function DocumentFlowPage({ token }) {
               ))}               
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {editingCar && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 10000,
+        }}>
+          <div style={{
+            width: '90%',
+            maxWidth: '600px',
+            maxHeight: '80vh',
+            backgroundColor: 'white',
+            borderRadius: '8px',
+            padding: '20px',
+            boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+            display: 'flex',
+            flexDirection: 'column',
+          }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '20px',
+            }}>
+              <h3>Редактировать автомобиль</h3>
+              <button
+                onClick={closeEditCarModal}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '1.5em',
+                  cursor: 'pointer',
+                }}
+              >
+                &times;
+              </button>
+            </div>
+
+            <form onSubmit={saveEditedCar}> 
+              <div style={{ marginBottom: '10px' }}>
+                <label>ID:</label>
+                <input
+                  type="text"
+                  value={editingCar.id}
+                  disabled
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    borderRadius: '4px',
+                    border: '1px solid #ccc',
+                  }}
+                />
+              </div>
+
+              <div style={{ marginBottom: '10px' }}>
+                <label>Марка:</label>
+                <input
+                  type="text"
+                  value={editingCar.brand}
+                  onChange={(e) => setEditingCar({...editingCar, brand: e.target.value})}
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    borderRadius: '4px',
+                    border: '1px solid #ccc',
+                  }}
+                />
+              </div>
+
+              <div style={{ marginBottom: '10px' }}>
+                <label>Модель:</label>
+                <input
+                  type="text"
+                  value={editingCar.model}
+                  onChange={(e) => setEditingCar({...editingCar, model: e.target.value})}
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    borderRadius: '4px',
+                    border: '1px solid #ccc',
+                  }}
+                />
+              </div>
+
+              <div style={{ marginBottom: '10px' }}>
+                <label>VIN:</label>
+                <input
+                  type="text"
+                  value={editingCar.vin}
+                  onChange={(e) => setEditingCar({...editingCar, vin: e.target.value})}
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    borderRadius: '4px',
+                    border: '1px solid #ccc',
+                  }}
+                />
+              </div>
+
+              <div style={{ marginBottom: '10px' }}>
+                <label>Год:</label>
+                <input
+                  type="number"
+                  value={editingCar.year || ''}
+                  onChange={(e) => setEditingCar({...editingCar, year: e.target.value})}
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    borderRadius: '4px',
+                    border: '1px solid #ccc',
+                  }}
+                />
+              </div>
+
+              <div style={{ marginBottom: '10px' }}>
+                <label>Дата прибытия:</label>
+                <input
+                  type="date"
+                  value={editingCar.arrival_date}
+                  onChange={(e) => setEditingCar({...editingCar, arrival_date: e.target.value})}
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    borderRadius: '4px',
+                    border: '1px solid #ccc',
+                  }}
+                />
+              </div>
+
+              <div style={{ marginTop: '20px', display: 'flex', gap: '10px' }}>
+                <button
+                  type="submit"
+                  style={{
+                    padding: '8px 16px',
+                    backgroundColor: '#27ae60',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Сохранить
+                </button>
+                <button
+                  type="button"
+                  onClick={closeEditCarModal}
+                  style={{
+                    padding: '8px 16px',
+                    backgroundColor: '#95a5a6',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Отмена
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
