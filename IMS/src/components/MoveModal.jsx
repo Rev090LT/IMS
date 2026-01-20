@@ -7,6 +7,7 @@ function MoveModal({ onClose, token }) {
   const [fromLocationId, setFromLocationId] = useState('');
   const [toLocationId, setToLocationId] = useState('');
   const [quantity, setQuantity] = useState(1);
+  const [availableQuantity, setAvailableQuantity] = useState(0);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [locations, setLocations] = useState([]);
@@ -25,7 +26,7 @@ function MoveModal({ onClose, token }) {
           setError(data.error || 'Ошибка загрузки складов');
         }
       } catch (err) {
-        setError('Network error or server is unreachable');
+        setError('Network error or server is reachable');
         console.error('Error fetching locations:', err);
       } finally {
         setLoading(false);
@@ -35,6 +36,48 @@ function MoveModal({ onClose, token }) {
     fetchLocations();
   }, [token]);
 
+  // <<<--- Функция для получения количества товара на локации --->
+  const fetchAvailableQuantity = async (qrCode, locationId) => {
+    if (!qrCode || !locationId) {
+      setAvailableQuantity(0);
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/items/${qrCode}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!response.ok) {
+        console.error('Error fetching item details:', response.statusText);
+        setAvailableQuantity(0);
+        return;
+      }
+
+      const item = await response.json();
+      
+      // <<<--- Найдем количество товара на конкретной локации --->
+      if (item.location_id == locationId) {
+        setAvailableQuantity(item.quantity);
+      } else {
+        setAvailableQuantity(0);
+      }
+    } catch (err) {
+      console.error('Error fetching available quantity:', err);
+      setAvailableQuantity(0);
+    }
+  };
+
+  // <<<--- Обновим количество при изменении qrCode или fromLocationId --->
+  useEffect(() => {
+    fetchAvailableQuantity(qrCode, fromLocationId);
+  }, [qrCode, fromLocationId, token]);
+
+  // <<<--- Обновим quantity при изменении availableQuantity --->
+  useEffect(() => {
+    setQuantity(prev => Math.min(prev, availableQuantity)); // <<<--- Вот тут ограничим quantity
+  }, [availableQuantity]);
+
   // <<<--- Функция для поиска по имени --->
   const handleItemNameChange = async (e) => {
     const name = e.target.value;
@@ -42,12 +85,26 @@ function MoveModal({ onClose, token }) {
 
     if (name.trim() !== '') {
       try {
-        const response = await getItemByName(name, token); // <<<--- Вот тут передаём token
+        const response = await getItemByName(name, token);
         const data = await response.json();
 
         if (response.ok) {
-          setSearchResults(data); // <<<--- Сохраняем результаты
-          setShowDropdown(true); // <<<--- Показываем выпадающий список
+          // <<<--- Добавим информацию о локации в результаты поиска --->
+          const itemsWithLocation = await Promise.all(data.map(async (item) => {
+            const detailsResponse = await fetch(`/api/items/${item.qr_code}`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (detailsResponse.ok) {
+              const details = await detailsResponse.json();
+              const location = locations.find(loc => loc.id === details.location_id);
+              return { ...item, current_location_id: details.location_id, current_location_name: location?.name };
+            }
+            return { ...item, current_location_id: null, current_location_name: null };
+          }));
+
+          setSearchResults(itemsWithLocation);
+          setShowDropdown(true);
           setError('');
         } else {
           setError(data.error || 'Не удалось получить товар');
@@ -70,12 +127,13 @@ function MoveModal({ onClose, token }) {
   const handleSelectItem = (item) => {
     setQrCode(item.qr_code); // <<<--- Подставляем QR-код
     setItemName(item.name); // <<<--- Подставляем имя
+    setFromLocationId(item.current_location_id || ''); // <<<--- Подставляем локацию
     setSearchResults([]); // <<<--- Очищаем результаты
     setShowDropdown(false); // <<<--- Скрываем список
+    setAvailableQuantity(0); // <<<--- Сбросим доступное количество
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async () => {
     setError('');
     setSuccess('');
 
@@ -83,8 +141,14 @@ function MoveModal({ onClose, token }) {
     const parsedToId = parseInt(toLocationId);
     const parsedQuantity = parseInt(quantity);
 
-    if (!qrCode || isNaN(parsedFromId) || isNaN(parsedToId) || parsedQuantity <= 0) {
+    // <<<--- Проверим, что parsedQuantity > 0 и не больше доступного количества --->
+    if (!qrCode || isNaN(parsedFromId) || isNaN(parsedToId) || isNaN(parsedQuantity) || parsedQuantity <= 0) {
       setError('QR Code, From Location, To Location, and Quantity are required');
+      return;
+    }
+
+    if (parsedQuantity > availableQuantity) {
+      setError(`Количество превышает доступное. Доступно: ${availableQuantity}`);
       return;
     }
 
@@ -111,6 +175,7 @@ function MoveModal({ onClose, token }) {
         setFromLocationId('');
         setToLocationId('');
         setQuantity(1);
+        setAvailableQuantity(0);
         setSearchResults([]);
         setShowDropdown(false);
       } else {
@@ -137,12 +202,12 @@ function MoveModal({ onClose, token }) {
           {loading ? (
             <p>Загрузка складов...</p>
           ) : (
-            <form onSubmit={handleSubmit} className="modal-form">
+            <form className="modal-form">
               <div style={{ position: 'relative' }}>
                 <label>Наименование:</label>
                 <input
                   type="text"
-                  value={itemName || ''} // <<<--- Вот тут исправили
+                  value={itemName || ''}
                   onChange={handleItemNameChange}
                   placeholder="Введите наименование для подстановки QR-кода"
                 />
@@ -175,7 +240,10 @@ function MoveModal({ onClose, token }) {
                         }}
                         onMouseDown={(e) => e.preventDefault()}
                       >
-                        {item.name}
+                        <div>{item.name}</div>
+                        <div style={{ fontSize: '12px', color: '#666' }}>
+                          QR: {item.qr_code}, Склад: {item.current_location_name || 'Неизвестно'}
+                        </div>
                       </li>
                     ))}
                   </ul>
@@ -186,7 +254,7 @@ function MoveModal({ onClose, token }) {
                 <label>QR код:</label>
                 <input
                   type="text"
-                  value={qrCode || ''} // <<<--- Вот тут исправили
+                  value={qrCode || ''}
                   onChange={(e) => setQrCode(e.target.value)}
                   required
                 />
@@ -195,7 +263,7 @@ function MoveModal({ onClose, token }) {
               <div>
                 <label>Переместить из:</label>
                 <select
-                  value={fromLocationId || ''} // <<<--- Вот тут исправили
+                  value={fromLocationId || ''}
                   onChange={(e) => setFromLocationId(e.target.value)}
                   required
                 >
@@ -211,7 +279,7 @@ function MoveModal({ onClose, token }) {
               <div>
                 <label>Переместить в:</label>
                 <select
-                  value={toLocationId || ''} // <<<--- Вот тут исправили
+                  value={toLocationId || ''}
                   onChange={(e) => setToLocationId(e.target.value)}
                   required
                 >
@@ -225,12 +293,13 @@ function MoveModal({ onClose, token }) {
               </div>
 
               <div>
-                <label>Количество:</label>
+                <label>Количество (доступно: {availableQuantity}):</label>
                 <input
                   type="number"
-                  value={quantity || 1} // <<<--- Вот тут исправили
-                  onChange={(e) => setQuantity(Number(e.target.value))}
+                  value={quantity || 1}
+                  onChange={(e) => setQuantity(Math.min(Number(e.target.value), availableQuantity))}
                   min="1"
+                  max={availableQuantity}
                   required
                 />
               </div>
@@ -240,7 +309,8 @@ function MoveModal({ onClose, token }) {
 
         <div className="modal-actions">
           <button type="button" onClick={onClose} className="cancel">Отмена</button>
-          <button type="button" onClick={handleSubmit}>Переместить</button>        </div>
+          <button type="button" onClick={handleSubmit}>Переместить</button>
+        </div>
       </div>
     </div>
   );

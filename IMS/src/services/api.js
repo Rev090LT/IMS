@@ -25,9 +25,11 @@ export const getItemByQR = (qrCode, token) => {
 export const scanItem = getItemByQR;
 
 // === Перемещение товара ===
+// services/api.js
+
 export const moveItem = async ({ qr_code, from_location_id, to_location_id, quantity }, token) => {
   try {
-    const response = await fetch(`${API_BASE}/items/move`, {
+    const response = await fetch('/api/items/move', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -42,7 +44,8 @@ export const moveItem = async ({ qr_code, from_location_id, to_location_id, quan
     });
 
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      const errorData = await response.json();
+      throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
     }
 
     return response;

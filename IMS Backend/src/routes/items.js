@@ -475,64 +475,83 @@ router.post('/dispose', authenticateToken, async (req, res) => {
 });
 
 // <<<--- ПЕРЕМЕЩЕНИЕ ТОВАРА --->
+// IMS Backend/routes/items.js
+
+// IMS Backend/routes/items.js
+
+// IMS Backend/routes/items.js
+
 router.post('/move', authenticateToken, async (req, res) => {
-  const { qr_code, from_location_id, to_location_id, quantity, comment } = req.body; // <= Вот тут
+  console.log('Move request body:', req.body); // <<<--- Добавь лог
 
-  console.log('Received POST /api/items/move:', { qr_code, from_location_id, to_location_id, quantity, comment });
+  const { qr_code, from_location_id, to_location_id, quantity } = req.body;
 
-  if (!qr_code || !from_location_id || !to_location_id || quantity <= 0) { // <= Вот тут
-    return res.status(400).json({ error: 'QR Code, From Location, To Location, and Quantity are required' }); // <= Вот тук
+  console.log('Parsed values:', { qr_code, from_location_id, to_location_id, quantity }); // <<<--- Добавь лог
+
+  if (!qr_code || !from_location_id || !to_location_id || !quantity) {
+    console.log('Validation failed'); // <<<--- Добавь лог
+    return res.status(400).json({ error: 'Missing required fields' });
   }
 
   try {
-    // <<<--- Вот тут найдём item_id по qr_code --->
-    const itemResult = await pool.query('SELECT id FROM items WHERE qr_code = $1 AND location_id = $2', [qr_code, from_location_id]);
+    // <<<--- Проверим, что товар существует и на нужной локации --->
+    const itemResult = await pool.query(
+      'SELECT id, quantity FROM items WHERE qr_code = $1 AND location_id = $2',
+      [qr_code, from_location_id]
+    );
+
+    console.log('Item search result:', itemResult.rows);
+
     if (itemResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Item not found in the specified location' });
+      console.log('Item not found at source location');
+      return res.status(400).json({ error: 'Item not found at source location' });
     }
 
     const item = itemResult.rows[0];
-    const item_id = item.id; // <= Вот тут
 
-    // ... (остальной код, используя item_id)
+    console.log('Found item:', item);
+
     if (item.quantity < quantity) {
-      return res.status(400).json({ error: 'Not enough quantity to move' });
+      console.log('Insufficient quantity. Available:', item.quantity, 'Requested:', quantity);
+      return res.status(400).json({ error: 'Insufficient quantity' });
     }
 
-    // Обновим количество в старой локации
-    const newQuantity = item.quantity - quantity;
-    await pool.query('UPDATE items SET quantity = $1 WHERE id = $2', [newQuantity, item_id]);
+    // <<<--- Обновим количество в старой локации --->
+    await pool.query(
+      'UPDATE items SET quantity = quantity - $1 WHERE id = $2',
+      [quantity, item.id]
+    );
 
-    // Если товара не осталось на старой локации, проверим статус
-    if (newQuantity === 0) {
-      await pool.query('UPDATE items SET status = $1 WHERE id = $2', ['disposed', item_id]);
-    } else if (item.status === 'disposed' && newQuantity > 0) {
-      await pool.query('UPDATE items SET status = $1 WHERE id = $2', ['warehouse', item_id]);
-    }
+    // <<<--- Добавим запись о перемещении --->
+    await pool.query(
+      'INSERT INTO movements (item_id, from_location_id, to_location_id, quantity, moved_at, moved_by_user_id) VALUES ($1, $2, $3, $4, NOW(), $5)',
+      [item.id, from_location_id, to_location_id, quantity, req.user.id]
+    );
 
-    // Проверим, существует ли уже товар в новой локации
-    const existingItemResult = await pool.query('SELECT id FROM items WHERE qr_code = $1 AND location_id = $2', [qr_code, to_location_id]); // <= Вот тут
+    // <<<--- Проверим, есть ли уже такой товар в новой локации --->
+    const existingItemResult = await pool.query(
+      'SELECT id FROM items WHERE qr_code = $1 AND location_id = $2',
+      [qr_code, to_location_id]
+    );
+
     if (existingItemResult.rows.length > 0) {
-      // Объединим с существующим товаром
-      await pool.query('UPDATE items SET quantity = quantity + $1 WHERE id = $2', [quantity, existingItemResult.rows[0].id]);
+      // <<<--- Обновим количество существующего товара --->
+      await pool.query(
+        'UPDATE items SET quantity = quantity + $1 WHERE id = $2',
+        [quantity, existingItemResult.rows[0].id]
+      );
     } else {
-      // Создадим новый товар в новой локации
-      await pool.query(`
-        INSERT INTO items (qr_code, name, description, quantity, status, location_id, created_by_user_id)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
-      `, [qr_code, item.name, item.description, quantity, 'warehouse', to_location_id, item.created_by_user_id]);
+      // <<<--- Создадим новую запись --->
+      await pool.query(
+        'INSERT INTO items (qr_code, name, description, quantity, status, location_id, created_by_user_id, updated_by_user_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
+        [qr_code, item.name, item.description, quantity, item.status, to_location_id, req.user.id, req.user.id]
+      );
     }
 
-    // Запишем в историю
-    await pool.query(`
-      INSERT INTO movements (item_id, from_location_id, to_location_id, employee_id, action_type, quantity, comment)
-      VALUES ($1, $2, $3, $4, 'move', $5, $6)
-    `, [item_id, from_location_id, to_location_id, req.user.id, quantity, comment || null]);
-
-    res.status(200).json({ message: 'Item moved successfully' });
+    res.json({ message: 'Item moved successfully' });
   } catch (err) {
     console.error('Error moving item:', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Failed to move item' });
   }
 });
 
