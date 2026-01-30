@@ -72,7 +72,7 @@ function MovementHistoryModal({ onClose, token }) {
                         <td>{movement.to_location_name || 'N/A'}</td>
                         <td>{movement.quantity}</td>
                         <td>{movement.action_type}</td>
-                        <td>{movement.employee_username || 'N/A'}</td>
+                        <td>{movement.created_by_username || 'N/A'}</td>
                         <td>{formatDate(movement.date)}</td>
                       </tr>
                     ))

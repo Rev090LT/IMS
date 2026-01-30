@@ -75,7 +75,7 @@ function MoveModal({ onClose, token }) {
 
   // <<<--- Обновим quantity при изменении availableQuantity --->
   useEffect(() => {
-    setQuantity(prev => Math.min(prev, availableQuantity)); // <<<--- Вот тут ограничим quantity
+    setQuantity(prev => Math.max(1, Math.min(prev, availableQuantity))); // <<<--- Вот тут исправили: Math.max(1, ...)
   }, [availableQuantity]);
 
   // <<<--- Функция для поиска по имени --->
@@ -134,6 +134,16 @@ function MoveModal({ onClose, token }) {
   };
 
   const handleSubmit = async () => {
+    console.log('=== DEBUG: handleSubmit START ===');
+    console.log('qrCode:', qrCode, typeof qrCode);
+    console.log('fromLocationId:', fromLocationId, typeof fromLocationId);
+    console.log('toLocationId:', toLocationId, typeof toLocationId);
+    console.log('quantity:', quantity, typeof quantity);
+    console.log('parseInt(from):', parseInt(fromLocationId), 'isNaN?', isNaN(parseInt(fromLocationId)));
+    console.log('parseInt(to):', parseInt(toLocationId), 'isNaN?', isNaN(parseInt(toLocationId)));
+    console.log('parseInt(qty):', parseInt(quantity), 'isNaN?', isNaN(parseInt(quantity)));
+    console.log('availableQuantity:', availableQuantity);
+
     setError('');
     setSuccess('');
 
@@ -141,23 +151,36 @@ function MoveModal({ onClose, token }) {
     const parsedToId = parseInt(toLocationId);
     const parsedQuantity = parseInt(quantity);
 
-    // <<<--- Проверим, что parsedQuantity > 0 и не больше доступного количества --->
-    if (!qrCode || isNaN(parsedFromId) || isNaN(parsedToId) || isNaN(parsedQuantity) || parsedQuantity <= 0) {
-      setError('QR Code, From Location, To Location, and Quantity are required');
+    // <<<--- Строгая проверка — теперь мы точно знаем, почему ошибка --->
+    if (!qrCode || qrCode.trim() === '') {
+      setError('❌ QR Code пустой или не строка');
+      return;
+    }
+    if (isNaN(parsedFromId) || parsedFromId <= 0) {
+      setError(`❌ From Location невалидный: "${fromLocationId}" → parsed=${parsedFromId}`);
+      return;
+    }
+    if (isNaN(parsedToId) || parsedToId <= 0) {
+      setError(`❌ To Location невалидный: "${toLocationId}" → parsed=${parsedToId}`);
+      return;
+    }
+    if (isNaN(parsedQuantity) || parsedQuantity <= 0) {
+      setError(`❌ Quantity невалиден: "${quantity}" → parsed=${parsedQuantity}`);
       return;
     }
 
     if (parsedQuantity > availableQuantity) {
-      setError(`Количество превышает доступное. Доступно: ${availableQuantity}`);
+      setError(`⚠️ Количество (${parsedQuantity}) > доступного (${availableQuantity})`);
       return;
     }
 
     if (parsedFromId === parsedToId) {
-      setError('From and To locations cannot be the same');
+      setError('❌ From и To склады одинаковы');
       return;
     }
 
     try {
+      console.log('✅ Все параметры валидны. Отправляем запрос...');
       const response = await moveItem({
         qr_code: qrCode,
         from_location_id: parsedFromId,
@@ -166,10 +189,12 @@ function MoveModal({ onClose, token }) {
       }, token);
 
       const data = await response.json();
+      console.log('🔍 Response status:', response.status);
+      console.log('🔍 Response data:', data);
 
       if (response.ok) {
-        setSuccess('Товар перемещен успешно');
-        // Очищаем форму
+        setSuccess('✅ Товар перемещён успешно!');
+        // сброс формы
         setQrCode('');
         setItemName('');
         setFromLocationId('');
@@ -179,11 +204,11 @@ function MoveModal({ onClose, token }) {
         setSearchResults([]);
         setShowDropdown(false);
       } else {
-        setError(data.error || 'Failed to move item');
+        setError(`❌ Ошибка сервера: ${data.error || 'Неизвестная ошибка'}`);
       }
     } catch (err) {
-      setError('Network error or server is unreachable');
-      console.error('Error during move item:', err);
+      console.error('💥 Ошибка сети/сервера:', err);
+      setError(`Network error: ${err.message}`);
     }
   };
 
@@ -297,7 +322,12 @@ function MoveModal({ onClose, token }) {
                 <input
                   type="number"
                   value={quantity || 1}
-                  onChange={(e) => setQuantity(Math.min(Number(e.target.value), availableQuantity))}
+                  onChange={(e) => {
+                    const val = Number(e.target.value);
+                    if (!isNaN(val) && val >= 1) {
+                      setQuantity(Math.min(val, availableQuantity));
+                    }
+                  }}
                   min="1"
                   max={availableQuantity}
                   required
