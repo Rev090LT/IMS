@@ -47,7 +47,7 @@ function AboutDeveloper({ onClose }) {
           <p><strong>Проект:</strong> IMS (Inventory Management System)</p>
           <p><strong>Дата создания:</strong> Декабрь 2025</p>
           <p><strong>Описание:</strong> Система управления складским учетом для автомастерской.</p>
-          <p><strong>Версия:</strong> 1.0.23</p>
+          <p><strong>Версия:</strong> 1.0.26</p>
         </div>
       </div>
     </div>

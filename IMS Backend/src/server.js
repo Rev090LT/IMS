@@ -31,6 +31,7 @@ if (!fs.existsSync(logFilePath)) {
 
 // Проверим подключение к БД
 pool.query('SELECT NOW()', (err, res) => {
+  console.log('Database connect started...');
   if (err) {
     console.error('Database connection failed:', err);
     return;
