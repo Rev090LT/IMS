@@ -7,6 +7,6 @@ RUN npm run build  # создаёт /app/dist
 
 FROM nginx:alpine
 COPY nginx.conf /etc/nginx/nginx.conf  
-COPY --from=builder /app/dist /usr/share/nginx/html/  # копирует ваши файлы
+COPY --from=builder /app/dist /usr/share/nginx/html/  
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]

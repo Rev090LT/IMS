@@ -1,4 +1,21 @@
 -- ===========================================
+-- СКРИПТ ДЛЯ СОБЫТИЯ: добавление колонки employee_id в таблицу movements
+-- ===========================================
+
+-- Добавление колонки employee_id в таблицу movements, если она не существует
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'movements' AND column_name = 'employee_id') THEN
+        ALTER TABLE movements ADD COLUMN employee_id INT;
+        ALTER TABLE movements ADD COLUMN date INT;
+        -- Добавляем внешний ключ на таблицу users (если она существует)
+        IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'users') THEN
+            ALTER TABLE movements ADD CONSTRAINT fk_movements_employee FOREIGN KEY (employee_id) REFERENCES users(id);
+        END IF;
+    END IF;
+END $$;
+
+-- ===========================================
 -- СКРИПТ ДЛЯ СОЗДАНИЯ СТРУКТУРЫ БАЗЫ ДАННЫХ
 -- ===========================================
 
@@ -249,3 +266,4 @@ ORDER BY sp.sale_date DESC;
 -- ===========================================
 -- КОНЕЦ СКРИПТА
 -- ===========================================
+```

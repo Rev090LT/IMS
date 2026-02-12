@@ -11,9 +11,9 @@ services:
     volumes:
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
       - postgres_data:/var/lib/postgresql/data
-      - ./pg_backup:/var/lib/postgresql/backup  # для резервного копирования
+      - ./pg_backup:/var/lib/postgresql/backup  
     ports:
-      - "5432:5432"  # изменил порт чтобы избежать конфликта с локальной установкой
+      - "5432:5432"  
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U inventory_user -d inventory_db"]
@@ -53,7 +53,7 @@ services:
     ports:
       - "80:80"
     environment:
-      - VITE_API_URL=http://localhost:3000
+      - VITE_API_URL=/api
     restart: unless-stopped
 
 volumes:
