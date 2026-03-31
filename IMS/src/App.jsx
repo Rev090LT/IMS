@@ -7,8 +7,8 @@ import ScanPage from './components/ScanPage';
 import MovePage from './components/MovePage';
 import DisposePage from './components/DisposePage';
 import InventoryPage from './components/InventoryPage';
-import DocumentFlowPage from './components/DocumentFlowPage'; // <<<--- Вернул
-import AdminPanelPage from './components/AdminPanelPage'; // <<<--- Добавил
+import DocumentFlowPage from './components/DocumentFlowPage';
+import AdminPanelPage from './components/AdminPanelPage';
 
 const PrivateRoute = ({ children }) => {
   const token = localStorage.getItem('token');
@@ -21,21 +21,21 @@ const PublicRoute = ({ children }) => {
 };
 
 function App() {
-  // <<<--- Функции для модальных окон (если используются в AdminPanelPage) --->
+  // Функции-заглушки для модальных окон AdminPanelPage
   const openSQLConsole = () => {
-    // Реализация открытия SQL консоли
     alert('Открытие SQL консоли');
   };
 
   const openNodeLogConsole = () => {
-    // Реализация открытия Node.js лог консоли
     alert('Открытие Node.js Log Console');
   };
 
   const openAddUserModal = () => {
-    // Реализация открытия модального окна создания пользователя
     alert('Открытие модального окна создания пользователя');
   };
+
+  // Получаем токен один раз для использования в роутах
+  const token = localStorage.getItem('token');
 
   return (
     <Router>
@@ -47,18 +47,26 @@ function App() {
           <Route path="/scan" element={<PrivateRoute><ScanPage /></PrivateRoute>} />
           <Route path="/move" element={<PrivateRoute><MovePage /></PrivateRoute>} />
           <Route path="/dispose" element={<PrivateRoute><DisposePage /></PrivateRoute>} />
-          <Route path="/inventory" element={<PrivateRoute><InventoryPage /></PrivateRoute>} />
-
-          <Route path="/document-flow" element={
+          
+          {/* Журнал склада — отдельная страница с передачей токена */}
+          <Route path="/inventory" element={
             <PrivateRoute>
-              <DocumentFlowPage token={localStorage.getItem('token')} />
+              <InventoryPage token={token} />
             </PrivateRoute>
           } />
 
+          {/* Документооборот */}
+          <Route path="/document-flow" element={
+            <PrivateRoute>
+              <DocumentFlowPage token={token} />
+            </PrivateRoute>
+          } />
+
+          {/* Панель администратора */}
           <Route path="/admin-panel" element={
             <PrivateRoute>
               <AdminPanelPage
-                token={localStorage.getItem('token')}
+                token={token}
                 onOpenSQLConsole={openSQLConsole}
                 onOpenNodeLogConsole={openNodeLogConsole}
                 onOpenAddUserModal={openAddUserModal}
@@ -66,6 +74,7 @@ function App() {
             </PrivateRoute>
           } />
 
+          {/* Редирект с корня на дашборд */}
           <Route path="/" element={<Navigate to="/dashboard" />} />
         </Routes>
       </div>

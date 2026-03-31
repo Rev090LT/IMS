@@ -494,7 +494,7 @@ function SellPartModal({ onClose, token }) {
                       <span>Кол-во:</span>
                       <input
                         type="number"
-                        value={item.quantity}
+                        value={item.quantity || ''}
                         onChange={(e) => handleQuantityChange(item.id, e.target.value)}
                         min=""
                         max={item.quantity}
@@ -508,7 +508,7 @@ function SellPartModal({ onClose, token }) {
                       <span>Цена:</span>
                       <input
                         type="number"
-                        value={item.selling_price}
+                        value={item.selling_price || ''}
                         onChange={(e) => handlePriceChange(item.id, e.target.value)}
                         min="0.01"
                         step="0.01"
