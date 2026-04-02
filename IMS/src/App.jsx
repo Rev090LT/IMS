@@ -5,6 +5,7 @@ import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 import ScanPage from './components/ScanPage';
 import MovePage from './components/MovePage';
+import MovementHistoryPage from './components/MovementHistoryPage';
 import DisposePage from './components/DisposePage';
 import InventoryPage from './components/InventoryPage';
 import DocumentFlowPage from './components/DocumentFlowPage';
@@ -73,7 +74,11 @@ function App() {
               />
             </PrivateRoute>
           } />
-
+          <Route path="/movement-history" element={
+            <PrivateRoute>
+              <MovementHistoryPage token={token} />
+            </PrivateRoute>
+          } />
           {/* Редирект с корня на дашборд */}
           <Route path="/" element={<Navigate to="/dashboard" />} />
         </Routes>

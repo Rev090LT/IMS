@@ -17,6 +17,9 @@ import suppliersRouter from './routes/suppliers.js';
 import soldPartsRouter from './routes/sold-parts.js';
 import incomeSummaryRouter from './routes/income-summary.js';
 import addUserRouter from './routes/add-user.js';
+import photosRoutes from './routes/photos.js';
+import logsRoutes from './routes/logs.js';
+import { httpLogger } from './utils/logger.js';
 
 const app = express();
 
@@ -41,8 +44,18 @@ app.use(helmet());
 app.use(cors({
   origin: ['http://localhost:5173', 'http://localhost:3000'],
   credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
+
+app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
+  setHeaders: (res, path) => {
+    // Добавляем CORS заголовки для изображений
+    res.setHeader('Access-Control-Allow-Origin', 'http://localhost:5173');
+    res.setHeader('Access-Control-Allow-Methods', 'GET');
+  }
+}));
+
 app.use(express.json());
 
 app.use('/api/auth', authRoutes);
@@ -57,7 +70,10 @@ app.use('/api/suppliers', suppliersRouter);
 app.use('/api/sold-parts', soldPartsRouter);
 app.use('/api/income-summary', incomeSummaryRouter);
 app.use('/api/add-user', addUserRouter);
-
+app.use('/api/photos', photosRoutes);
+app.use('/uploads', express.static('uploads'));
+app.use(httpLogger); // Логирование всех HTTP запросов
+app.use('/api/logs', logsRoutes);
 // <<<--- Маршрут для получения логов --->
 app.get('/api/node-logs', (req, res) => {
   try {

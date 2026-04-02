@@ -7,7 +7,7 @@ import MoveModal from './MoveModal';
 import DisposeModal from './DisposeModal';
 import AddItemModal from './AddItemModal';
 import AddLocationModal from './AddLocationModal';
-import MovementHistoryModal from './MovementHistoryModal';
+// ❌ УБРАЛ: MovementHistoryModal — больше не нужен как модальное окно
 import PrintLabelModal from './PrintLabelModal';
 import SellPartModal from './SellPartModal';
 import SQLConsole from './SQLConsole';
@@ -198,6 +198,7 @@ function Dashboard() {
               <h3 className="dashboard-subsection-title slide-in-left">История и печать</h3>
               <div className="dashboard-buttons-grid dashboard-grid-three">
                 <div className="dashboard-button-container">
+                  {/* ✅ ИЗМЕНЕНО: Журнал номенклатуры — переход на страницу */}
                   <button
                     onClick={() => navigate('/inventory')}
                     className="dashboard-button dashboard-button-inventory card-hover"
@@ -210,8 +211,9 @@ function Dashboard() {
                 </div>
 
                 <div className="dashboard-button-container">
+                  {/* ✅ ИЗМЕНЕНО: Журнал перемещений — переход на страницу */}
                   <button
-                    onClick={() => setActiveModal('history')}
+                    onClick={() => navigate('/movement-history')}
                     className="dashboard-button dashboard-button-history card-hover"
                   >
                     <div className="dashboard-button-content">
@@ -340,11 +342,7 @@ function Dashboard() {
           <AddLocationModal onClose={() => setActiveModal(null)} token={token} />
         </div>
       )}
-      {activeModal === 'history' && (
-        <div className="modal-overlay">
-          <MovementHistoryModal onClose={() => setActiveModal(null)} token={token} />
-        </div>
-      )}
+      {/* ❌ УБРАЛ: Модальное окно журнала перемещений — теперь это отдельная страница */}
       {activeModal === 'printLabel' && (
         <div className="modal-overlay">
           <PrintLabelModal onClose={() => setActiveModal(null)} token={token} />

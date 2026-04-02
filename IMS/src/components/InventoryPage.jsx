@@ -3,6 +3,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ItemCardModal from './ItemCard';
 import EditItemModal from './EditItemModal';
+import PhotoUpload from './PhotoUpload';
+import PhotoGallery from './PhotoGallery';
 
 function InventoryPage({ token }) {
   const navigate = useNavigate();
@@ -25,6 +27,10 @@ function InventoryPage({ token }) {
   // Модальные окна
   const [editingItem, setEditingItem] = useState(null);
   const [viewCardItem, setViewCardItem] = useState(null);
+  
+  // Состояние для полей продажи (пустые по умолчанию)
+  const [saleQuantity, setSaleQuantity] = useState('');
+  const [salePrice, setSalePrice] = useState('');
   
   // Загрузка фильтров
   useEffect(() => {
@@ -70,6 +76,14 @@ function InventoryPage({ token }) {
     };
     fetchItems();
   }, [token]);
+
+  // Сброс полей продажи при выборе нового товара
+  useEffect(() => {
+    if (selectedItem) {
+      setSaleQuantity('');
+      setSalePrice('');
+    }
+  }, [selectedItem]);
 
   // Фильтрация
   const filteredItems = items.filter(item => {
@@ -137,6 +151,8 @@ function InventoryPage({ token }) {
 
   const handleSelectItem = (item) => {
     setSelectedItem(item);
+    setSaleQuantity('');
+    setSalePrice('');
     setShowDetails(true);
   };
 
@@ -144,7 +160,68 @@ function InventoryPage({ token }) {
     setShowDetails(false);
   };
 
-  // Стили (добавлены анимационные классы)
+  // Обработчики для полей продажи
+  const handleQuantityChange = (value) => {
+    setSaleQuantity(value);
+  };
+
+  const handlePriceChange = (value) => {
+    setSalePrice(value);
+  };
+
+  const handleSellItem = async () => {
+    if (!saleQuantity || !salePrice) {
+      alert('Пожалуйста, заполните количество и цену');
+      return;
+    }
+
+    const qty = parseInt(saleQuantity);
+    const price = parseFloat(salePrice);
+
+    if (qty > selectedItem.quantity) {
+      alert('Недостаточно товара на складе');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/sales', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          item_id: selectedItem.id,
+          quantity: qty,
+          selling_price: price,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Ошибка при продаже');
+      }
+
+      // Обновить список товаров
+      const updatedItems = items.map(item => 
+        item.id === selectedItem.id 
+          ? { ...item, quantity: item.quantity - qty }
+          : item
+      );
+      setItems(updatedItems);
+      setSelectedItem(prev => prev ? { ...prev, quantity: prev.quantity - qty } : null);
+      
+      // Сбросить поля
+      setSaleQuantity('');
+      setSalePrice('');
+      
+      alert('Продажа успешно оформлена!');
+    } catch (err) {
+      alert(`Ошибка: ${err.message}`);
+    }
+  };
+
+  // Стили
   const pageStyle = {
     minHeight: '100vh',
     backgroundColor: '#f5f5f5',
@@ -348,6 +425,37 @@ function InventoryPage({ token }) {
     color: '#666',
   };
 
+  // Стили для полей продажи
+  const saleFormStyle = {
+    display: 'flex',
+    gap: '10px',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    marginTop: '15px',
+    paddingTop: '15px',
+    borderTop: '1px dashed #ddd',
+  };
+
+  const smallInputStyle = {
+    width: '70px',
+    padding: '6px 8px',
+    border: '1px solid #ccc',
+    borderRadius: '4px',
+    fontSize: '13px',
+  };
+
+  const sellButtonStyle = {
+    padding: '8px 16px',
+    backgroundColor: '#27ae60',
+    color: 'white',
+    border: 'none',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontSize: '13px',
+    fontWeight: '500',
+    transition: 'all 0.2s',
+  };
+
   // CSS для адаптивности + анимации
   const responsiveStyles = `
     @keyframes tableRowFadeIn {
@@ -534,7 +642,7 @@ function InventoryPage({ token }) {
                     </span>
                   </div>
                   <div style={infoFieldStyle}>
-                    <span style={infoLabelStyle}>Количество</span>
+                    <span style={infoLabelStyle}>Количество на складе</span>
                     <span style={{ ...infoValueStyle, fontWeight: '600', color: selectedItem.quantity > 0 ? '#27ae60' : '#e74c3c' }} className="fade-in delay-4">
                       {selectedItem.quantity} шт.
                     </span>
@@ -549,6 +657,40 @@ function InventoryPage({ token }) {
                       {selectedItem.status === 'warehouse' ? '📍 На складе' : selectedItem.status}
                     </span>
                   </div>
+                </div>
+
+                {/* Форма продажи с ПУСТЫМИ полями */}
+                <div style={saleFormStyle}>
+                  <label style={{ fontSize: '13px', fontWeight: '500' }}>
+                    Продажа:
+                  </label>
+                  <input
+                    type="number"
+                    placeholder="Кол-во"
+                    value={saleQuantity}
+                    onChange={(e) => handleQuantityChange(e.target.value)}
+                    min="1"
+                    max={selectedItem.quantity}
+                    style={smallInputStyle}
+                  />
+                  <input
+                    type="number"
+                    placeholder="Цена"
+                    value={salePrice}
+                    onChange={(e) => handlePriceChange(e.target.value)}
+                    min="0.01"
+                    step="0.01"
+                    style={{ ...smallInputStyle, width: '90px' }}
+                  />
+                  <button
+                    onClick={handleSellItem}
+                    style={sellButtonStyle}
+                    className="glow-hover success"
+                    onMouseEnter={(e) => e.target.style.transform = 'translateY(-2px)'}
+                    onMouseLeave={(e) => e.target.style.transform = 'translateY(0)'}
+                  >
+                    💰 Продать
+                  </button>
                 </div>
 
                 {/* Кнопки действий */}
@@ -610,27 +752,24 @@ function InventoryPage({ token }) {
                 </div>
               </div>
 
-              {/* Фотографии */}
+              {/* Фотографии - ИНТЕГРАЦИЯ КОМПОНЕНТОВ */}
               <div style={cardStyle} className="inventory-card card-hover">
                 <h2 style={cardTitleStyle}>📷 Фотографии</h2>
-                <div style={{
-                  border: '2px dashed #ddd',
-                  borderRadius: '8px',
-                  padding: '30px',
-                  textAlign: 'center',
-                  backgroundColor: '#fafafa',
-                  transition: 'all 0.3s ease',
-                }}
-                className="card-hover"
-                >
-                  <div className="icon-bounce" style={{ fontSize: '48px', marginBottom: '10px' }}>📷</div>
-                  <div style={{ fontWeight: '500', color: '#2c3e50', marginBottom: '5px' }}>
-                    Нет фотографий
-                  </div>
-                  <div style={{ fontSize: '12px', color: '#666' }}>
-                    Загрузка фото будет доступна soon
-                  </div>
-                </div>
+                
+                {/* Загрузка фото */}
+                <PhotoUpload
+                  itemId={selectedItem.id}
+                  token={token}
+                  onPhotoUploaded={() => {
+                    // Можно добавить обновление галереи если нужно
+                  }}
+                />
+                
+                {/* Галерея фото */}
+                <PhotoGallery
+                  itemId={selectedItem.id}
+                  token={token}
+                />
               </div>
             </>
           ) : (

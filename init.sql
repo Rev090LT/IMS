@@ -170,6 +170,40 @@ CREATE TABLE IF NOT EXISTS pending_users (
     created_at TIMESTAMP DEFAULT NOW(),
     approved BOOLEAN DEFAULT FALSE -- Оставим на будущее, если решим одобрять вручную
 );
+-- Таблица для фотографий товаров
+CREATE TABLE item_photos (
+    id SERIAL PRIMARY KEY,
+    item_id INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+    photo_url VARCHAR(500) NOT NULL,
+    photo_name VARCHAR(255),
+    file_size INTEGER,
+    mime_type VARCHAR(100),
+    is_primary BOOLEAN DEFAULT false,
+    uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    uploaded_by INTEGER REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS user_activity_logs (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id),
+    username VARCHAR(50),
+    action VARCHAR(100) NOT NULL,
+    entity_type VARCHAR(50),
+    entity_id INTEGER,
+    old_value JSONB,
+    new_value JSONB,
+    ip_address INET,
+    user_agent TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS system_logs (
+    id SERIAL PRIMARY KEY,
+    level VARCHAR(20) NOT NULL,
+    message TEXT NOT NULL,
+    metadata JSONB,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 
 -- ===========================================
 -- ДОБАВЛЕНИЕ ВНЕШНИХ КЛЮЧЕЙ (после создания всех таблиц)
@@ -194,6 +228,7 @@ ALTER TABLE sold_parts ADD CONSTRAINT fk_sold_parts_supplier FOREIGN KEY (suppli
 -- Индекс для быстрого поиска по QR-коду
 CREATE INDEX IF NOT EXISTS idx_items_qr_code ON items(qr_code);
 
+CREATE INDEX IF NOT EXISTS idx_item_photos_item_id ON item_photos(item_id);
 -- Индекс для быстрого поиска по имени товара
 CREATE INDEX IF NOT EXISTS idx_items_name ON items(name);
 
@@ -212,6 +247,17 @@ CREATE INDEX IF NOT EXISTS idx_cars_vin ON cars(vin);
 -- Индекс для быстрого поиска по дате продажи
 CREATE INDEX IF NOT EXISTS idx_sold_parts_sale_date ON sold_parts(sale_date);
 
+CREATE INDEX IF NOT EXISTS idx_logs_user_id ON user_activity_logs(user_id);
+
+CREATE INDEX IF NOT EXISTS idx_logs_action ON user_activity_logs(action);
+
+CREATE INDEX IF NOT EXISTS idx_logs_created_at ON user_activity_logs(created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_logs_entity ON user_activity_logs(entity_type, entity_id);
+
+CREATE INDEX IF NOT EXISTS idx_system_logs_level ON system_logs(level);
+
+CREATE INDEX IF NOT EXISTS idx_system_logs_created_at ON system_logs(created_at DESC);
 -- ===========================================
 -- ПРОВЕРОЧНЫЕ ОГРАНИЧЕНИЯ
 -- ===========================================
