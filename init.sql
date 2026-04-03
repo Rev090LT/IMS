@@ -205,6 +205,26 @@ CREATE TABLE IF NOT EXISTS system_logs (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Таблица для записей в гараж
+CREATE TABLE IF NOT EXISTS garage_appointments (
+    id SERIAL PRIMARY KEY,
+    customer_name VARCHAR(255) NOT NULL,
+    customer_phone VARCHAR(50),
+    customer_email VARCHAR(100),
+    car_model VARCHAR(255),
+    car_vin VARCHAR(50),
+    car_license_plate VARCHAR(20),
+    appointment_date DATE NOT NULL,
+    appointment_time TIME,
+    reason TEXT,
+    status VARCHAR(50) DEFAULT 'scheduled', -- scheduled, completed, cancelled, no-show
+    notes TEXT,
+    created_by INTEGER REFERENCES users(id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+
 -- ===========================================
 -- ДОБАВЛЕНИЕ ВНЕШНИХ КЛЮЧЕЙ (после создания всех таблиц)
 -- ===========================================
@@ -258,6 +278,12 @@ CREATE INDEX IF NOT EXISTS idx_logs_entity ON user_activity_logs(entity_type, en
 CREATE INDEX IF NOT EXISTS idx_system_logs_level ON system_logs(level);
 
 CREATE INDEX IF NOT EXISTS idx_system_logs_created_at ON system_logs(created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_appointments_date ON garage_appointments(appointment_date);
+
+CREATE INDEX IF NOT EXISTS idx_appointments_status ON garage_appointments(status);
+
+CREATE INDEX IF NOT EXISTS idx_appointments_customer ON garage_appointments(customer_name);
 -- ===========================================
 -- ПРОВЕРОЧНЫЕ ОГРАНИЧЕНИЯ
 -- ===========================================
@@ -285,7 +311,7 @@ BEGIN
         ALTER TABLE sold_parts ADD CONSTRAINT chk_sold_quantity_positive CHECK (quantity > 0);
     END IF;
 END $$;
-
+COMMENT ON COLUMN garage_appointments.status IS 'scheduled=Запланирована, completed=Выполнена, cancelled=Отменена, no-show=Не явился';
 -- ===========================================
 -- ПОЛЕЗНЫЕ ФУНКЦИИ/ПРЕДСТАВЛЕНИЯ (опционально)
 -- ===========================================

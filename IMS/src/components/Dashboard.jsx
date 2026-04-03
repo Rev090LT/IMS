@@ -285,14 +285,20 @@ function Dashboard() {
               <h3 className="dashboard-subsection-title slide-in-left">Продажа</h3>
               <div className="dashboard-buttons-grid dashboard-grid-one">
                 <div className="dashboard-button-container">
-                  <button
-                    onClick={openSellPartModal}
-                    className="dashboard-button dashboard-button-sell-part card-hover"
-                    style={{ backgroundColor: '#e74c3c', color: 'white' }}
-                  >
+                  <button onClick={() => navigate('/sell-part')} className="dashboard-button dashboard-button-sell-part card-hover">      
                     <div className="dashboard-button-content">
                       <div className="dashboard-button-icon icon-bounce">💰</div>
                       <h3 className="dashboard-button-label">Продажа запчасти</h3>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => navigate('/garage-appointments')}
+                    className="dashboard-button card-hover"
+                    style={{ backgroundColor: '#16a085', color: 'white' }}
+      >
+                    <div className="dashboard-button-content">
+                      <div className="dashboard-button-icon icon-bounce">🔧</div>
+                      <h3 className="dashboard-button-label">Записи в гараж</h3>
                     </div>
                   </button>
                 </div>
@@ -351,11 +357,6 @@ function Dashboard() {
       {addCarModalOpen && (
         <div className="modal-overlay">
           <AddCarModal onClose={closeAddCarModal} token={token} />
-        </div>
-      )}
-      {sellPartModalOpen && (
-        <div className="modal-overlay">
-          <SellPartModal onClose={closeSellPartModal} token={token} />
         </div>
       )}
       {sqlConsoleOpen && (

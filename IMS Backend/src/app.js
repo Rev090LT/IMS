@@ -20,6 +20,7 @@ import addUserRouter from './routes/add-user.js';
 import photosRoutes from './routes/photos.js';
 import logsRoutes from './routes/logs.js';
 import { httpLogger } from './utils/logger.js';
+import appointmentsRoutes from './routes/appointments.js';
 
 const app = express();
 
@@ -74,6 +75,7 @@ app.use('/api/photos', photosRoutes);
 app.use('/uploads', express.static('uploads'));
 app.use(httpLogger); // Логирование всех HTTP запросов
 app.use('/api/logs', logsRoutes);
+app.use('/api/appointments', appointmentsRoutes);
 // <<<--- Маршрут для получения логов --->
 app.get('/api/node-logs', (req, res) => {
   try {

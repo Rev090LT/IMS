@@ -10,6 +10,9 @@ import DisposePage from './components/DisposePage';
 import InventoryPage from './components/InventoryPage';
 import DocumentFlowPage from './components/DocumentFlowPage';
 import AdminPanelPage from './components/AdminPanelPage';
+import SellPartPage from './components/SellPartPage';
+import GarageAppointmentsPage from './components/GarageAppointmentsPage';
+
 
 const PrivateRoute = ({ children }) => {
   const token = localStorage.getItem('token');
@@ -79,6 +82,16 @@ function App() {
               <MovementHistoryPage token={token} />
             </PrivateRoute>
           } />
+          <Route path="/sell-part" element={
+            <PrivateRoute>
+              <SellPartPage token={token} />
+            </PrivateRoute>
+          } />        
+          <Route path="/garage-appointments" element={
+            <PrivateRoute>
+              <GarageAppointmentsPage token={token} />
+            </PrivateRoute>
+          } />  
           {/* Редирект с корня на дашборд */}
           <Route path="/" element={<Navigate to="/dashboard" />} />
         </Routes>
