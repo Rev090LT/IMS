@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import CreateAppointmentModal from './CreateAppointmentModal';
+import EditAppointmentModal from './EditAppointmentModal';
 
 function GarageAppointmentsPage({ token }) {
   const navigate = useNavigate();
@@ -12,7 +13,7 @@ function GarageAppointmentsPage({ token }) {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [viewMode, setViewMode] = useState('calendar'); // 'calendar' or 'list'
   const [currentMonth, setCurrentMonth] = useState(new Date());
-
+  const [editingAppointment, setEditingAppointment] = useState(null);
   useEffect(() => {
     fetchAppointments();
   }, [token, selectedDate]);
@@ -30,6 +31,16 @@ function GarageAppointmentsPage({ token }) {
       
       if (!response.ok) throw new Error('Failed to fetch appointments');
       const data = await response.json();
+      
+      // Логируем для отладки
+      console.log('📅 Загружено записей:', data.length);
+      data.forEach(apt => {
+        const originalDate = apt.appointment_date;
+        const dateObj = new Date(originalDate);
+        const localDate = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
+        console.log(`Запись #${apt.id}: ${originalDate} → ${localDate}`);
+      });
+      
       setAppointments(data);
     } catch (err) {
       setError(err.message);
@@ -54,6 +65,23 @@ function GarageAppointmentsPage({ token }) {
     // Принудительно обновляем данные с сервера
     setTimeout(() => {
         fetchAppointments();
+    }, 100);
+  };
+  
+  const handleUpdateAppointment = (updatedAppointment) => {
+    console.log('🔄 Запись обновлена:', updatedAppointment);
+    
+    // Обновляем запись в списке
+    setAppointments(prev => 
+      prev.map(apt => apt.id === updatedAppointment.id ? updatedAppointment : apt)
+    );
+    
+    // Закрываем модалку
+    setEditingAppointment(null);
+    
+    // Принудительно обновляем данные
+    setTimeout(() => {
+      fetchAppointments();
     }, 100);
   };
 
@@ -102,9 +130,23 @@ function GarageAppointmentsPage({ token }) {
     return new Date(year, month, 1).getDay();
   };
 
-  const getAppointmentsForDate = (date) => {
-    const dateStr = new Date(date).toISOString().split('T')[0];
-    return appointments.filter(a => a.appointment_date === dateStr);
+  const getAppointmentsForDate = (targetDateStr) => {
+    // targetDateStr это "YYYY-MM-DD" (например "2026-04-07")
+    
+    return appointments.filter(apt => {
+      // Извлекаем дату из appointment_date БЕЗ учёта часового пояса
+      const aptDate = new Date(apt.appointment_date);
+      
+      // Получаем компоненты даты в локальном часовом поясе
+      const year = aptDate.getFullYear();
+      const month = String(aptDate.getMonth() + 1).padStart(2, '0');
+      const day = String(aptDate.getDate()).padStart(2, '0');
+      
+      // Формируем строку "YYYY-MM-DD" в локальном времени
+      const aptDateStr = `${year}-${month}-${day}`;
+      
+      return aptDateStr === targetDateStr;
+    });
   };
 
   const prevMonth = () => {
@@ -127,22 +169,67 @@ function GarageAppointmentsPage({ token }) {
   const badgeStyle = (color) => ({ padding: '4px 8px', borderRadius: '4px', color: 'white', fontSize: '12px', fontWeight: '500', backgroundColor: color, display: 'inline-block' });
   const errorBoxStyle = { color: '#e74c3c', backgroundColor: '#fadbd8', padding: '10px', borderRadius: '4px', marginBottom: '15px', border: '1px solid #e74c3c' };
 
-  const calendarStyle = { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '5px', marginBottom: '20px' };
-  const calendarHeaderStyle = { textAlign: 'center', fontWeight: 'bold', padding: '10px', backgroundColor: '#f5f5f5', borderRadius: '4px' };
+  const calendarStyle = { 
+    display: 'grid', 
+    gridTemplateColumns: 'repeat(7, 1fr)', 
+    gap: '3px', 
+    marginBottom: '20px',
+    width: '100%',
+  };
+
+  const calendarHeaderStyle = { 
+    textAlign: 'center', 
+    fontWeight: 'bold', 
+    padding: '8px 2px', 
+    backgroundColor: '#3498db',
+    color: 'white',
+    borderRadius: '4px',
+    fontSize: '12px',
+  };
+
   const calendarDayStyle = (isToday, hasAppointments) => ({
-    padding: '10px',
-    minHeight: '100px',
+    padding: '8px 4px',
+    minHeight: '80px',
     border: '1px solid #e0e0e0',
     borderRadius: '4px',
     backgroundColor: isToday ? '#e3f2fd' : hasAppointments ? '#f0f7ff' : 'white',
     cursor: 'pointer',
     transition: 'all 0.2s',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px',
+    fontSize: '13px',
   });
 
   const responsiveStyles = `
     @media (max-width: 768px) {
-      .calendar-grid { grid-template-columns: repeat(1, 1fr) !important; }
-      .calendar-day { min-height: 60px !important; }
+      .calendar-grid { 
+        grid-template-columns: repeat(7, 1fr) !important; 
+        gap: 2px !important;
+      }
+      .calendar-day { 
+        min-height: 60px !important; 
+        padding: 4px 2px !important;
+        font-size: 11px !important;
+      }
+      .calendar-header {
+        padding: 6px 2px !important;
+        font-size: 10px !important;
+      }
+      .calendar-day-number {
+        font-size: 12px !important;
+        font-weight: bold !important;
+      }
+      .calendar-day-appointments {
+        font-size: 9px !important;
+        line-height: 1.2 !important;
+      }
+    }
+    
+    @media (max-width: 480px) {
+      .calendar-day { 
+        min-height: 50px !important; 
+      }
     }
   `;
 
@@ -171,7 +258,7 @@ function GarageAppointmentsPage({ token }) {
       
       {/* Шапка */}
       <header style={headerStyle} className="slide-in-down">
-        <h1 style={titleStyle}>🔧 Записи в гараж</h1>
+        <h1 style={titleStyle}>🔧 Записи в бокс</h1>
         <div style={{ display: 'flex', gap: '10px' }}>
           <button onClick={() => setShowCreateModal(true)} style={{ ...buttonStyle, backgroundColor: '#27ae60', color: 'white' }} className="glow-hover">
             ➕ Создать запись
@@ -203,22 +290,22 @@ function GarageAppointmentsPage({ token }) {
             
             {Array.from({ length: daysInMonth }).map((_, i) => {
               const day = i + 1;
+              // Создаём дату с явным указанием времени чтобы избежать сдвига по часовому поясу
               const date = new Date(year, month, day);
-              const dateStr = date.toISOString().split('T')[0];
+              const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
               const isToday = dateStr === new Date().toISOString().split('T')[0];
-              const dayAppointments = getAppointmentsForDate(date);
-              
+              const dayAppointments = getAppointmentsForDate(dateStr); // ← Передаём строку, не Date объект
               return (
-                <div
-                key={day}
-                className="calendar-day"
-                style={calendarDayStyle(isToday, dayAppointments.length > 0)}
-                onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setSelectedDate(dateStr);
-                }}
-                >
+                  <div
+                    key={day}
+                    className="calendar-day"
+                    style={calendarDayStyle(isToday, dayAppointments.length > 0)}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setSelectedDate(dateStr); // ← Сохраняем как строку "YYYY-MM-DD"
+                    }}
+                  >              
                   <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>{day}</div>
                   {dayAppointments.length > 0 && (
                     <div style={{ fontSize: '11px' }}>
@@ -250,8 +337,13 @@ function GarageAppointmentsPage({ token }) {
 
         {/* Записи на выбранный день */}
         <div style={cardStyle}>
-          <h3 style={cardTitleStyle}>📅 Записи на {new Date(selectedDate).toLocaleDateString('ru-RU')}</h3>
-          
+            <h3 style={cardTitleStyle}>
+              📅 Записи на {new Date(selectedDate + 'T00:00:00').toLocaleDateString('ru-RU', {
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric'
+              })}
+            </h3>          
           {getAppointmentsForDate(selectedDate).length === 0 ? (
             <div style={{ textAlign: 'center', padding: '40px', color: '#999' }}>
               <div style={{ fontSize: '48px', marginBottom: '10px' }}>📅</div>
@@ -278,7 +370,15 @@ function GarageAppointmentsPage({ token }) {
                       )}
                     </div>
                     <div style={{ display: 'flex', gap: '8px' }}>
-                      <button onClick={() => {/* Edit */}} style={{ ...buttonStyle, backgroundColor: '#3498db', color: 'white', padding: '4px 8px', fontSize: '11px' }}>✏️</button>
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingAppointment(apt);
+                        }} 
+                        style={{ ...buttonStyle, backgroundColor: '#3498db', color: 'white', padding: '4px 8px', fontSize: '11px' }}
+                      >
+                        ✏️
+                      </button>
                       <button onClick={() => handleDeleteAppointment(apt.id)} style={{ ...buttonStyle, backgroundColor: '#e74c3c', color: 'white', padding: '4px 8px', fontSize: '11px' }}>🗑️</button>
                     </div>
                   </div>
@@ -333,6 +433,16 @@ function GarageAppointmentsPage({ token }) {
             token={token}
             selectedDate={selectedDate}
             onAppointmentCreated={handleCreateAppointment}
+          />
+        </div>
+      )}
+      {editingAppointment && (
+        <div className="modal-overlay modal-animate">
+          <EditAppointmentModal
+            appointment={editingAppointment}
+            onClose={() => setEditingAppointment(null)}
+            token={token}
+            onAppointmentUpdated={handleUpdateAppointment}
           />
         </div>
       )}

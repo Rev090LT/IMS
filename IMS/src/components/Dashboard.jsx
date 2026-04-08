@@ -146,12 +146,12 @@ function Dashboard() {
           <header className="dashboard-header slide-in-down">
             <div className="dashboard-header-content">
               <h1 className="dashboard-title fade-in">IMS Dashboard</h1>
+              {userInfo && <span className="user-info-text">Добро пожаловать, {userInfo.username}!</span>}
             </div>
           </header>
 
           <main className="dashboard-main-content dashboard-main-content-flex">
             <div className="dashboard-user-info-bar fade-in">
-              {userInfo && <span className="user-info-text">Добро пожаловать, {userInfo.username}!</span>}
             </div>
 
             <h2 className="dashboard-section-title slide-in-left">Основное меню</h2>
@@ -255,7 +255,7 @@ function Dashboard() {
 
                 <div className="dashboard-button-container">
                   <button
-                    onClick={() => setActiveModal('add')}
+                    onClick={() => navigate('/add-item')}
                     className="dashboard-button dashboard-button-add card-hover"
                   >
                     <div className="dashboard-button-content">
@@ -298,7 +298,7 @@ function Dashboard() {
       >
                     <div className="dashboard-button-content">
                       <div className="dashboard-button-icon icon-bounce">🔧</div>
-                      <h3 className="dashboard-button-label">Записи в гараж</h3>
+                      <h3 className="dashboard-button-label">Записи в бокс</h3>
                     </div>
                   </button>
                 </div>
@@ -336,11 +336,6 @@ function Dashboard() {
       {activeModal === 'dispose' && (
         <div className="modal-overlay">
           <DisposeModal onClose={() => setActiveModal(null)} token={token} />
-        </div>
-      )}
-      {activeModal === 'add' && (
-        <div className="modal-overlay">
-          <AddItemModal onClose={() => setActiveModal(null)} token={token} onItemAdded={handleItemAdded} />
         </div>
       )}
       {activeModal === 'addLocation' && (

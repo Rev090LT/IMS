@@ -12,6 +12,7 @@ import DocumentFlowPage from './components/DocumentFlowPage';
 import AdminPanelPage from './components/AdminPanelPage';
 import SellPartPage from './components/SellPartPage';
 import GarageAppointmentsPage from './components/GarageAppointmentsPage';
+import AddItemPage from './components/AddItemPage';
 
 
 const PrivateRoute = ({ children }) => {
@@ -90,6 +91,11 @@ function App() {
           <Route path="/garage-appointments" element={
             <PrivateRoute>
               <GarageAppointmentsPage token={token} />
+            </PrivateRoute>
+          } />
+          <Route path="/add-item" element={
+            <PrivateRoute>
+              <AddItemPage token={token} />
             </PrivateRoute>
           } />  
           {/* Редирект с корня на дашборд */}
