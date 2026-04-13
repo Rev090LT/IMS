@@ -655,3 +655,4 @@ COMMENT ON COLUMN items.status IS 'warehouse=На складе, available=Дос
 -- Проверка успешного выполнения
 SELECT 'Database initialization completed successfully!' AS status,
        NOW() AS completed_at;
+
