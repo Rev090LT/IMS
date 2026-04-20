@@ -82,11 +82,7 @@ function Dashboard() {
         align-items: stretch !important;
       }
       .right-column {
-        width: 100% !important;
-        max-width: 400px !important;
-        margin: 0 auto !important;
-        position: static !important;
-        order: 2 !important;
+        display: none !important;
       }
       .left-column {
         order: 1 !important;
@@ -182,9 +178,10 @@ function Dashboard() {
         onOpenAddCategoryModal={openAddCategoryModal}
         onOpenNodeLogConsole={openNodeLogConsole}
         userRole={userInfo?.role}
+        token={token}
       />
 
-      {/* === ОСНОВНОЙ КОНТЕЙНЕР - БЕЗ ФОНА === */}
+      {/* === ОСНОВНОЙ КОНТЕЙНЕР === */}
       <div className="page-transition" style={{
         minHeight: '100vh',
         width: '100%',
@@ -274,7 +271,7 @@ function Dashboard() {
             </div>
           </header>
 
-          {/* === MAIN CONTENT - ДВУХКОЛОНОЧНЫЙ LAYOUT === */}
+          {/* === MAIN CONTENT === */}
           <main 
             className="dashboard-main-content" 
             style={{
@@ -290,10 +287,7 @@ function Dashboard() {
             }}
           >
             {/* Левая часть - кнопки */}
-            <div style={{ 
-              flex: 1, 
-              minWidth: 0,
-            }}>
+            <div className="left-column" style={{ flex: 1, minWidth: 0 }}>
               <h2 className="dashboard-section-title slide-in-left">Основное меню</h2>
 
               {/* Основные действия */}
@@ -451,8 +445,8 @@ function Dashboard() {
               </div>
             </div>
 
-            {/* Правая часть - календарь */}
-            <div style={{
+            {/* Правая часть - календарь (только десктоп) */}
+            <div className="right-column" style={{
               width: '320px',
               flexShrink: 0,
               position: 'sticky',

@@ -13,7 +13,8 @@ import AdminPanelPage from './components/AdminPanelPage';
 import SellPartPage from './components/SellPartPage';
 import GarageAppointmentsPage from './components/GarageAppointmentsPage';
 import AddItemPage from './components/AddItemPage';
-
+import CarsPage from './components/CarsPage';
+import CarDetailPage from './components/CarDetailPage'; // Детальная страница (создай отдельно)
 
 const PrivateRoute = ({ children }) => {
   const token = localStorage.getItem('token');
@@ -98,6 +99,16 @@ function App() {
               <AddItemPage token={token} />
             </PrivateRoute>
           } />  
+          <Route path="/cars" element={
+            <PrivateRoute>
+              <CarsPage token={token} />
+            </PrivateRoute>
+          } />
+          <Route path="/cars/:id" element={
+            <PrivateRoute>
+              <CarDetailPage token={token} />
+            </PrivateRoute>
+          } />
           {/* Редирект с корня на дашборд */}
           <Route path="/" element={<Navigate to="/dashboard" />} />
         </Routes>

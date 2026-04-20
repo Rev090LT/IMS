@@ -21,6 +21,8 @@ import photosRoutes from './routes/photos.js';
 import logsRoutes from './routes/logs.js';
 import { httpLogger } from './utils/logger.js';
 import appointmentsRoutes from './routes/appointments.js';
+import carsRoutes from './routes/cars.js';  // ← Должно быть
+import { upload } from './middleware/upload.js';
 
 const app = express();
 
@@ -65,6 +67,7 @@ app.use('/api/locations', locationsRoutes);
 app.use('/api/sql', sqlRoutes);
 app.use('/api/movements', movementsRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/cars', carsRoutes);  
 app.use('/api/lookup', lookupRoutes);
 app.use('/api/counterparties', counterpartiesRouter);
 app.use('/api/suppliers', suppliersRouter);

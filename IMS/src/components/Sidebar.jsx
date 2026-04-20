@@ -1,12 +1,23 @@
 // IMS/src/components/Sidebar.jsx
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import MiniCalendar from './MiniCalendar';
 
-function Sidebar({ isOpen, onClose, onOpenSQLConsole, onOpenNodeLogConsole, onOpenAddUserModal, onOpenAboutDeveloper, onOpenAddManufacturerModal, onOpenAddCategoryModal, userRole }) {
+function Sidebar({ 
+  isOpen, 
+  onClose, 
+  onOpenSQLConsole, 
+  onOpenNodeLogConsole, 
+  onOpenAddUserModal, 
+  onOpenAboutDeveloper, 
+  onOpenAddManufacturerModal, 
+  onOpenAddCategoryModal, 
+  userRole,
+  token 
+}) {
   const navigate = useNavigate();
   const isAdmin = userRole === 'admin';
 
-  // Отладка
   useEffect(() => {
     console.log('Sidebar isOpen:', isOpen);
   }, [isOpen]);
@@ -26,8 +37,9 @@ function Sidebar({ isOpen, onClose, onOpenSQLConsole, onOpenNodeLogConsole, onOp
   const sidebarStyle = {
     position: 'fixed',
     top: 0,
-    left: isOpen ? 0 : '-300px',
-    width: '280px',
+    left: isOpen ? 0 : '-100%',  // ← Изменил с -300px на -100% для адаптивности
+    width: '100%',                 // ← Полная ширина
+    maxWidth: '400px',             // ← Но не шире 400px на больших экранах
     height: '100vh',
     background: 'linear-gradient(180deg, #1e3c72 0%, #2a5298 100%)',
     color: 'white',
@@ -35,6 +47,8 @@ function Sidebar({ isOpen, onClose, onOpenSQLConsole, onOpenNodeLogConsole, onOp
     transition: 'left 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
     boxShadow: isOpen ? '4px 0 15px rgba(0,0,0,0.3)' : 'none',
     overflowY: 'auto',
+    display: 'flex',
+    flexDirection: 'column',
   };
 
   const overlayStyle = {
@@ -54,6 +68,9 @@ function Sidebar({ isOpen, onClose, onOpenSQLConsole, onOpenNodeLogConsole, onOp
     padding: '25px 20px',
     background: 'rgba(255,255,255,0.1)',
     borderBottom: '1px solid rgba(255,255,255,0.1)',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   };
 
   const titleStyle = {
@@ -67,6 +84,7 @@ function Sidebar({ isOpen, onClose, onOpenSQLConsole, onOpenNodeLogConsole, onOp
     listStyle: 'none',
     padding: '15px 0',
     margin: 0,
+    flex: 1,
   };
 
   const menuItemStyle = {
@@ -76,10 +94,10 @@ function Sidebar({ isOpen, onClose, onOpenSQLConsole, onOpenNodeLogConsole, onOp
   const menuLinkStyle = {
     display: 'flex',
     alignItems: 'center',
-    padding: '12px 15px',
+    padding: '14px 20px',  // ← Чуть больше отступы для удобства на мобильных
     color: 'rgba(255,255,255,0.9)',
     textDecoration: 'none',
-    fontSize: '15px',
+    fontSize: '16px',       // ← Чуть крупнее шрифт
     borderRadius: '8px',
     cursor: 'pointer',
     transition: 'all 0.3s ease',
@@ -87,24 +105,21 @@ function Sidebar({ isOpen, onClose, onOpenSQLConsole, onOpenNodeLogConsole, onOp
   };
 
   const iconStyle = {
-    marginRight: '12px',
-    fontSize: '18px',
+    marginRight: '15px',    // ← Чуть больше отступ
+    fontSize: '20px',       // ← Крупнее иконки
     width: '24px',
     textAlign: 'center',
   };
 
   const closeIconStyle = {
-    position: 'absolute',
-    top: '15px',
-    right: '15px',
     background: 'rgba(255,255,255,0.2)',
     border: 'none',
     color: 'white',
-    width: '36px',
-    height: '36px',
+    width: '40px',          // ← Крупнее кнопка
+    height: '40px',
     borderRadius: '50%',
     cursor: 'pointer',
-    fontSize: '20px',
+    fontSize: '22px',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -121,6 +136,23 @@ function Sidebar({ isOpen, onClose, onOpenSQLConsole, onOpenNodeLogConsole, onOp
     marginTop: '10px',
   };
 
+  // Стили для календаря в сайдбаре
+  const calendarSectionStyle = {
+    borderTop: '1px solid rgba(255,255,255,0.1)',
+    padding: '15px 20px 20px',
+    background: 'rgba(0,0,0,0.1)',
+  };
+
+  const calendarTitleStyle = {
+    fontSize: '14px',
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.9)',
+    marginBottom: '12px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+  };
+
   return (
     <>
       {/* Overlay */}
@@ -135,25 +167,23 @@ function Sidebar({ isOpen, onClose, onOpenSQLConsole, onOpenNodeLogConsole, onOp
         className={`sidebar ${isOpen ? 'open' : ''}`} 
         style={sidebarStyle}
       >
-        {/* Кнопка закрытия */}
-        <button
-          onClick={onClose}
-          style={closeIconStyle}
-          onMouseEnter={(e) => {
-            e.target.style.background = 'rgba(255,255,255,0.3)';
-            e.target.style.transform = 'rotate(90deg)';
-          }}
-          onMouseLeave={(e) => {
-            e.target.style.background = 'rgba(255,255,255,0.2)';
-            e.target.style.transform = 'rotate(0deg)';
-          }}
-        >
-          ✕
-        </button>
-
-        {/* Заголовок */}
+        {/* Заголовок с кнопкой закрытия */}
         <div style={headerStyle}>
           <h3 style={titleStyle}>📋 Меню</h3>
+          <button
+            onClick={onClose}
+            style={closeIconStyle}
+            onMouseEnter={(e) => {
+              e.target.style.background = 'rgba(255,255,255,0.3)';
+              e.target.style.transform = 'rotate(90deg)';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.background = 'rgba(255,255,255,0.2)';
+              e.target.style.transform = 'rotate(0deg)';
+            }}
+          >
+            ✕
+          </button>
         </div>
 
         {/* Меню */}
@@ -281,17 +311,42 @@ function Sidebar({ isOpen, onClose, onOpenSQLConsole, onOpenNodeLogConsole, onOp
                   <span>Документооборот</span>
                 </a>
               </li>
+              <li style={menuItemStyle}>
+                <a
+                  onClick={(e) => {
+                    e.preventDefault();
+                    navigate('/cars');
+                    onClose();
+                  }}
+                  style={menuLinkStyle}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'rgba(255,255,255,0.15)';
+                    e.currentTarget.style.border = '1px solid rgba(255,255,255,0.2)';
+                    e.currentTarget.style.transform = 'translateX(5px)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'transparent';
+                    e.currentTarget.style.border = '1px solid transparent';
+                    e.currentTarget.style.transform = 'translateX(0)';
+                  }}
+                >
+                  <span style={iconStyle}>🚗</span>
+                  <span>Автомобили в разборе</span>
+                </a>
+              </li>
             </>
           )}
         </ul>
 
+        {/* === КАЛЕНДАРЬ - ТОЛЬКО ДЛЯ МОБИЛЬНЫХ === */}
+        <div className="mobile-calendar" style={calendarSectionStyle}>
+          <h4 style={calendarTitleStyle}>📅 Записи на сегодня</h4>
+          <MiniCalendar token={token} />
+        </div>
+
         {/* Футер */}
         <div style={{
-          position: 'absolute',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          padding: '15px 20px',
+          padding: '15px 20px 25px',
           background: 'rgba(0,0,0,0.2)',
           fontSize: '12px',
           color: 'rgba(255,255,255,0.6)',
@@ -300,6 +355,82 @@ function Sidebar({ isOpen, onClose, onOpenSQLConsole, onOpenNodeLogConsole, onOp
           IMS v1.0
         </div>
       </div>
+
+      {/* CSS для адаптивности */}
+      <style>{`
+        /* Сайдбар на мобильных - во всю ширину */
+        @media (max-width: 768px) {
+          .sidebar {
+            width: 100% !important;
+            max-width: 100% !important;
+            left: -100% !important;
+          }
+          .sidebar.open {
+            left: 0 !important;
+          }
+          .menu-link {
+            padding: 16px 25px !important;
+            font-size: 17px !important;
+          }
+          .menu-icon {
+            font-size: 22px !important;
+            margin-right: 18px !important;
+          }
+          .close-btn {
+            width: 44px !important;
+            height: 44px !important;
+            font-size: 24px !important;
+          }
+          .mobile-calendar {
+            padding: 20px !important;
+          }
+          .mobile-calendar .mini-calendar {
+            transform: scale(0.95);
+            transform-origin: top center;
+          }
+        }
+        
+        /* Сайдбар на планшетах */
+        @media (min-width: 769px) and (max-width: 1200px) {
+          .sidebar {
+            width: 85% !important;
+            max-width: 350px !important;
+          }
+        }
+        
+        /* Сайдбар на десктопе - узкий */
+        @media (min-width: 1201px) {
+          .sidebar {
+            width: 280px !important;
+            max-width: 280px !important;
+          }
+          .mobile-calendar {
+            display: none !important;
+          }
+        }
+        
+        /* Анимация появления */
+        @keyframes slideIn {
+          from {
+            opacity: 0;
+            transform: translateX(-20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0);
+          }
+        }
+        
+        .sidebar.open .menu-item {
+          animation: slideIn 0.3s ease forwards;
+        }
+        
+        .sidebar.open .menu-item:nth-child(1) { animation-delay: 0.05s; }
+        .sidebar.open .menu-item:nth-child(2) { animation-delay: 0.1s; }
+        .sidebar.open .menu-item:nth-child(3) { animation-delay: 0.15s; }
+        .sidebar.open .menu-item:nth-child(4) { animation-delay: 0.2s; }
+        .sidebar.open .menu-item:nth-child(5) { animation-delay: 0.25s; }
+      `}</style>
     </>
   );
 }

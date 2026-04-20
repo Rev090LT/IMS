@@ -82,16 +82,78 @@ CREATE TABLE IF NOT EXISTS manufacturers (
 
 CREATE TABLE IF NOT EXISTS cars (
     id SERIAL PRIMARY KEY,
-    brand VARCHAR(255) NOT NULL,
-    model VARCHAR(255) NOT NULL,
     vin VARCHAR(255) UNIQUE NOT NULL,
+    brand VARCHAR(100) NOT NULL,
+    model VARCHAR(100) NOT NULL,
+    generation VARCHAR(100), -- Например: A32, A33, A34
     year INTEGER,
+    color VARCHAR(50),
+    engine_type VARCHAR(100), -- Например: VQ20DD, RB25DE
+    engine_volume DECIMAL(4,1), -- Например: 2.0, 2.5
+    transmission VARCHAR(50), -- AT, MT, CVT
+    drive_type VARCHAR(50), -- FWD, RWD, AWD
+    body_type VARCHAR(50), -- Седан, Универсал, Купе
+    mileage INTEGER, -- Пробег в км
     arrival_date DATE NOT NULL,
-    status VARCHAR(50) DEFAULT 'active',
+    purchase_price DECIMAL(10,2), -- Цена покупки
+    status VARCHAR(30) DEFAULT 'active', -- active, dismantling, completed, sold
+    location_id INTEGER REFERENCES locations(id),
+    photos JSONB, -- Массив URL фотографий
+    documents JSONB, -- Документы (ПТС, СТС, договор)
+    notes TEXT,
+    created_by INTEGER REFERENCES users(id),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS car_compatibility (
+    id SERIAL PRIMARY KEY,
+    source_car_id INTEGER NOT NULL REFERENCES cars(id) ON DELETE CASCADE,
+    compatible_brand VARCHAR(100) NOT NULL,
+    compatible_model VARCHAR(100) NOT NULL,
+    compatible_generation VARCHAR(100),
+    compatibility_note TEXT, -- Например: "Подходят детали подвески 2000-2003"
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(source_car_id, compatible_brand, compatible_model, compatible_generation)
+);
+
+CREATE TABLE IF NOT EXISTS car_legal_info (
+    id SERIAL PRIMARY KEY,
+    car_id INTEGER UNIQUE NOT NULL REFERENCES cars(id) ON DELETE CASCADE,
+    pts_number VARCHAR(50), -- Номер ПТС
+    sts_number VARCHAR(50), -- Номер СТС
+    registration_number VARCHAR(20), -- Госномер
+    owner_name VARCHAR(255), -- Собственник
+    owner_inn VARCHAR(20), -- ИНН собственника
+    purchase_contract_number VARCHAR(50), -- Номер договора купли-продажи
+    purchase_contract_date DATE, -- Дата договора
+    purchase_contract_url VARCHAR(500), -- Сканы договоров
+    customs_declaration VARCHAR(50), -- ГТД для импорта
+    write_off_reason TEXT, -- Причина списания
+    write_off_date DATE,
+    is_arrested BOOLEAN DEFAULT FALSE, -- Есть ли ограничения
+    is залоговый BOOLEAN DEFAULT FALSE, -- В залоге ли
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS car_parts (
+    id SERIAL PRIMARY KEY,
+    car_id INTEGER NOT NULL REFERENCES cars(id) ON DELETE CASCADE,
+    item_id INTEGER REFERENCES items(id) ON DELETE SET NULL,
+    part_name VARCHAR(255) NOT NULL, -- Например: "Двигатель в сборе"
+    part_category VARCHAR(100), -- Двигатель, КПП, Подвеска
+    part_number VARCHAR(100), -- Артикул/номер детали
+    condition VARCHAR(50), -- Отличное, Хорошее, Среднее
+    price DECIMAL(10,2),
+    status VARCHAR(30) DEFAULT 'available', -- available, reserved, sold, installed
+    location_note VARCHAR(255), -- Где находится на авто/складе
+    photos JSONB,
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 -- 2.4 Контрагенты и поставщики
 -- ----------------------------------------------------------------------------
 
@@ -418,7 +480,14 @@ CREATE INDEX IF NOT EXISTS idx_counterparties_type ON counterparties(type);
 CREATE INDEX IF NOT EXISTS idx_counterparties_inn ON counterparties(inn);
 CREATE INDEX IF NOT EXISTS idx_suppliers_inn ON suppliers(inn);
 
-
+CREATE INDEX IF NOT EXISTS idx_cars_vin ON cars(vin);
+CREATE INDEX IF NOT EXISTS idx_cars_brand_model ON cars(brand, model);
+CREATE INDEX IF NOT EXISTS idx_cars_status ON cars(status);
+CREATE INDEX IF NOT EXISTS idx_cars_year ON cars(year);
+CREATE INDEX IF NOT EXISTS idx_compatibility_source ON car_compatibility(source_car_id);
+CREATE INDEX IF NOT EXISTS idx_compatibility_target ON car_compatibility(compatible_brand, compatible_model);
+CREATE INDEX IF NOT EXISTS idx_car_parts_car ON car_parts(car_id);
+CREATE INDEX IF NOT EXISTS idx_car_parts_status ON car_parts(status);
 -- ============================================================================
 -- 5. CONSTRAINTS (Проверочные ограничения)
 -- ============================================================================
@@ -558,6 +627,37 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+CREATE OR REPLACE VIEW cars_with_parts_count AS
+SELECT 
+    c.id,
+    c.vin,
+    c.brand,
+    c.model,
+    c.year,
+    c.status,
+    c.arrival_date,
+    COUNT(cp.id) as parts_count,
+    SUM(CASE WHEN cp.status = 'available' THEN 1 ELSE 0 END) as available_parts,
+    SUM(cp.price) as total_value
+FROM cars c
+LEFT JOIN car_parts cp ON c.id = cp.car_id
+GROUP BY c.id;
+
+-- Совместимые авто для поиска
+CREATE OR REPLACE VIEW compatible_cars_view AS
+SELECT 
+    c.id as car_id,
+    c.vin,
+    c.brand,
+    c.model,
+    c.generation,
+    c.year,
+    cc.compatible_brand,
+    cc.compatible_model,
+    cc.compatible_generation,
+    cc.compatibility_note
+FROM cars c
+LEFT JOIN car_compatibility cc ON c.id = cc.source_car_id;
 
 -- ============================================================================
 -- 8. TRIGGERS (Триггеры)
