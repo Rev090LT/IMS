@@ -23,6 +23,8 @@ import { httpLogger } from './utils/logger.js';
 import appointmentsRoutes from './routes/appointments.js';
 import carsRoutes from './routes/cars.js';  // ← Должно быть
 import { upload } from './middleware/upload.js';
+import platformsRoutes from './routes/platforms.js';
+
 
 const app = express();
 
@@ -79,6 +81,8 @@ app.use('/uploads', express.static('uploads'));
 app.use(httpLogger); // Логирование всех HTTP запросов
 app.use('/api/logs', logsRoutes);
 app.use('/api/appointments', appointmentsRoutes);
+app.use('/api/platforms', platformsRoutes);
+
 // <<<--- Маршрут для получения логов --->
 app.get('/api/node-logs', (req, res) => {
   try {

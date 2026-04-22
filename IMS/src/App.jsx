@@ -15,7 +15,7 @@ import GarageAppointmentsPage from './components/GarageAppointmentsPage';
 import AddItemPage from './components/AddItemPage';
 import CarsPage from './components/CarsPage';
 import CarDetailPage from './components/CarDetailPage'; // Детальная страница (создай отдельно)
-
+import PlatformsPage from './components/PlatformsPage';
 const PrivateRoute = ({ children }) => {
   const token = localStorage.getItem('token');
   return token ? children : <Navigate to="/login" />;
@@ -107,6 +107,11 @@ function App() {
           <Route path="/cars/:id" element={
             <PrivateRoute>
               <CarDetailPage token={token} />
+            </PrivateRoute>
+          } />
+          <Route path="/platforms" element={
+            <PrivateRoute>
+              <PlatformsPage token={token} />
             </PrivateRoute>
           } />
           {/* Редирект с корня на дашборд */}
