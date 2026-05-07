@@ -371,7 +371,7 @@ function Dashboard() {
 
               {/* Управление */}
               <div className="dashboard-section-group">
-                <h3 className="dashboard-subsection-title slide-in-left">Управление</h3>
+                <h3 className="dashboard-subsection-title slide-in-left">Управление складом</h3>
                 <div className="dashboard-buttons-grid dashboard-grid-three">
                   <div className="dashboard-button-container">
                     <button
@@ -443,6 +443,143 @@ function Dashboard() {
                   </div>
                 </div>
               </div>
+
+              {/* === CRM АВТОСЕРВИС (НОВЫЙ РАЗДЕЛ) === */}
+              <div className="dashboard-section-group" style={{
+                backgroundColor: 'rgba(155, 89, 182, 0.05)',
+                borderRadius: '12px',
+                padding: '16px',
+                border: '1px dashed rgba(155, 89, 182, 0.3)',
+              }}>
+                <h3 className="dashboard-subsection-title slide-in-left" style={{ color: '#9b59b6', marginBottom: '16px' }}>
+                  🔧 Управление сервисом <span style={{ fontSize: '11px', color: '#999', fontWeight: 'normal' }}>(CRM)</span>
+                </h3>
+                <div className="dashboard-buttons-grid dashboard-grid-two">
+                  
+                  {/* Заказ-наряды */}
+                  <div className="dashboard-button-container">
+                    <button
+                      onClick={() => navigate('/crm/work-orders')}
+                      className="dashboard-button card-hover"
+                      style={{ 
+                        backgroundColor: '#9b59b6', 
+                        color: 'white',
+                        border: '2px solid #8e44ad'
+                      }}
+                    >
+                      <div className="dashboard-button-content">
+                        <div className="dashboard-button-icon icon-bounce">📋</div>
+                        <h3 className="dashboard-button-label">Заказ-наряды</h3>
+                        <p style={{ fontSize: '11px', opacity: 0.9, margin: '4px 0 0' }}>
+                          Создать • Редактировать • Статусы
+                        </p>
+                      </div>
+                    </button>
+                  </div>
+                  
+                  {/* Клиенты */}
+                  <div className="dashboard-button-container">
+                    <button
+                      onClick={() => navigate('/crm/customers')}
+                      className="dashboard-button card-hover"
+                      style={{ 
+                        backgroundColor: '#3498db', 
+                        color: 'white',
+                        border: '2px solid #2980b9'
+                      }}
+                    >
+                      <div className="dashboard-button-content">
+                        <div className="dashboard-button-icon icon-bounce">👥</div>
+                        <h3 className="dashboard-button-label">Клиенты</h3>
+                        <p style={{ fontSize: '11px', opacity: 0.9, margin: '4px 0 0' }}>
+                          База • История • Лояльность
+                        </p>
+                      </div>
+                    </button>
+                  </div>
+                  
+                  {/* Платформы авто */}
+                  <div className="dashboard-button-container">
+                    <button
+                      onClick={() => navigate('/platforms')}
+                      className="dashboard-button card-hover"
+                      style={{ 
+                        backgroundColor: '#e74c3c', 
+                        color: 'white',
+                        border: '2px solid #c0392b'
+                      }}
+                    >
+                      <div className="dashboard-button-content">
+                        <div className="dashboard-button-icon icon-bounce">🏗️</div>
+                        <h3 className="dashboard-button-label">Платформы авто</h3>
+                        <p style={{ fontSize: '11px', opacity: 0.9, margin: '4px 0 0' }}>
+                          Совместимость • Поиск по VIN
+                        </p>
+                      </div>
+                    </button>
+                  </div>
+                  
+                  {/* Дашборд CRM */}
+                  <div className="dashboard-button-container">
+                    <button
+                      onClick={() => navigate('/crm')}
+                      className="dashboard-button card-hover"
+                      style={{ 
+                        backgroundColor: '#27ae60', 
+                        color: 'white',
+                        border: '2px solid #219a52'
+                      }}
+                    >
+                      <div className="dashboard-button-content">
+                        <div className="dashboard-button-icon icon-bounce">📊</div>
+                        <h3 className="dashboard-button-label">Дашборд CRM</h3>
+                        <p style={{ fontSize: '11px', opacity: 0.9, margin: '4px 0 0' }}>
+                          Статистика • Отчёты • Аналитика
+                        </p>
+                      </div>
+                    </button>
+                  </div>
+                  
+                </div>
+                
+                {/* Быстрая кнопка "Новый заказ-наряд" */}
+                <div style={{ marginTop: '12px' }}>
+                  <button
+                    onClick={() => navigate('/crm/work-orders/new')}
+                    className="glow-hover"
+                    style={{
+                      width: '100%',
+                      padding: '12px 20px',
+                      backgroundColor: '#8e44ad',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                      fontWeight: '500',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      transition: 'all 0.2s ease',
+                      boxShadow: '0 4px 12px rgba(142, 68, 173, 0.3)',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.target.style.transform = 'translateY(-2px)';
+                      e.target.style.boxShadow = '0 6px 16px rgba(142, 68, 173, 0.5)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.target.style.transform = 'translateY(0)';
+                      e.target.style.boxShadow = '0 4px 12px rgba(142, 68, 173, 0.3)';
+                    }}
+                  >
+                    <span style={{ fontSize: '18px' }}>➕</span>
+                    Создать новый заказ-наряд
+                  </button>
+                </div>
+              </div>
+              {/* === КОНЕЦ РАЗДЕЛА CRM === */}
+
             </div>
 
             {/* Правая часть - календарь (только десктоп) */}

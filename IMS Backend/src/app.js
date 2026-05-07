@@ -24,6 +24,9 @@ import appointmentsRoutes from './routes/appointments.js';
 import carsRoutes from './routes/cars.js';  // ← Должно быть
 import { upload } from './middleware/upload.js';
 import platformsRoutes from './routes/platforms.js';
+import crmRoutes from './routes/crm.js';
+import servicesRoutes from './routes/services.js';
+
 
 
 const app = express();
@@ -82,7 +85,8 @@ app.use(httpLogger); // Логирование всех HTTP запросов
 app.use('/api/logs', logsRoutes);
 app.use('/api/appointments', appointmentsRoutes);
 app.use('/api/platforms', platformsRoutes);
-
+app.use('/api/crm', crmRoutes);
+app.use(servicesRoutes);
 // <<<--- Маршрут для получения логов --->
 app.get('/api/node-logs', (req, res) => {
   try {
