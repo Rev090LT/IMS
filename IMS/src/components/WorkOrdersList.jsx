@@ -27,7 +27,20 @@ function WorkOrdersList({ token }) {
       });
       if (response.ok) {
         const data = await response.json();
-        setOrders(data);
+        console.log('API Response:', data); // 🔍 Для отладки
+        
+        // 🔧 Безопасное извлечение массива: пробуем разные варианты
+        const ordersArray = Array.isArray(data) 
+          ? data 
+          : Array.isArray(data?.work_orders) 
+            ? data.work_orders 
+            : Array.isArray(data?.orders) 
+              ? data.orders 
+              : [];
+        
+        setOrders(ordersArray);
+      } else {
+        console.error('API Error:', response.status, response.statusText);
       }
     } catch (err) {
       console.error('Error fetching orders:', err);
@@ -61,7 +74,7 @@ function WorkOrdersList({ token }) {
       'cancelled': '❌ Отменён',
       'archived': '📁 Архив'
     };
-    return labels[status] || status;
+    return labels[status] || status || '—';
   };
 
   const getPriorityBadge = (priority) => {
@@ -138,6 +151,9 @@ function WorkOrdersList({ token }) {
     backgroundColor: color,
   });
 
+  // 🔧 Гарантируем, что orders — всегда массив
+  const safeOrders = Array.isArray(orders) ? orders : [];
+
   return (
     <div style={containerStyle}>
       {/* Заголовок */}
@@ -149,6 +165,23 @@ function WorkOrdersList({ token }) {
         >
           ➕ Новый заказ-наряд
         </button>
+        <button 
+        onClick={() => navigate(-1)} 
+        style={{ 
+            padding: '10px 18px', 
+            backgroundColor: '#95a5a6', 
+            color: 'white', 
+            border: 'none', 
+            borderRadius: '8px', 
+            cursor: 'pointer',
+            fontSize: '14px',
+            transition: 'background 0.2s'
+        }}
+        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#7f8c8d'}
+        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#95a5a6'}
+        >
+        ← Назад
+      </button>
       </div>
 
       {/* Фильтры */}
@@ -216,49 +249,59 @@ function WorkOrdersList({ token }) {
                   ⏳ Загрузка...
                 </td>
               </tr>
-            ) : orders.length === 0 ? (
+            ) : safeOrders.length === 0 ? (
               <tr>
                 <td colSpan="8" style={{ ...tdStyle, textAlign: 'center', padding: '40px', color: '#999' }}>
                   Заказ-наряды не найдены
                 </td>
               </tr>
             ) : (
-              orders.map(order => {
-                const priority = getPriorityBadge(order.priority);
+              safeOrders.map(order => {
+                // 🔧 Безопасное получение priority с фолбэком
+                const priority = getPriorityBadge(order?.priority || 'normal');
+                
+                // 🔧 Безопасное получение vehicle_info
+                const vehicle = order?.vehicle_info || {};
+                const vehicleText = vehicle?.brand || vehicle?.make || order?.vehicle || '—';
+                
+                // 🔧 Безопасное получение customer_phone
+                const customerPhone = order?.customer_phone || order?.customer?.phone || '—';
+                const loyaltyLevel = order?.loyalty_level;
+                
                 return (
                   <tr
-                    key={order.id}
-                    onClick={() => navigate(`/crm/work-orders/${order.id}`)}
-                    style={{ cursor: 'pointer', transition: 'all 0.2s' }}
+                    key={order?.id || Math.random()}
+                    onClick={() => order?.id && navigate(`/crm/work-orders/${order.id}`)}
+                    style={{ cursor: order?.id ? 'pointer' : 'default', transition: 'all 0.2s' }}
                     onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
                     onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
                   >
-                    <td style={{ ...tdStyle, fontWeight: '600' }}>{order.order_number}</td>
+                    <td style={{ ...tdStyle, fontWeight: '600' }}>{order?.order_number || '—'}</td>
                     <td style={tdStyle}>
-                      {order.customer_phone}
-                      {order.loyalty_level && order.loyalty_level !== 'bronze' && (
+                      {customerPhone}
+                      {loyaltyLevel && loyaltyLevel !== 'bronze' && (
                         <span style={{ marginLeft: '5px', fontSize: '10px' }}>
-                          {order.loyalty_level === 'gold' ? '🥇' : order.loyalty_level === 'silver' ? '🥈' : '🥉'}
+                          {loyaltyLevel === 'gold' ? '🥇' : loyaltyLevel === 'silver' ? '🥈' : '🥉'}
                         </span>
                       )}
                     </td>
                     <td style={tdStyle}>
-                      {order.vehicle_info?.brand || '—'} {order.vehicle_info?.model || ''}
+                      {vehicleText} {vehicle?.model ? vehicle.model : ''}
                     </td>
                     <td style={tdStyle}>
-                      <span style={badgeStyle(getStatusColor(order.status))}>
-                        {getStatusLabel(order.status)}
+                      <span style={badgeStyle(getStatusColor(order?.status))}>
+                        {getStatusLabel(order?.status)}
                       </span>
                     </td>
                     <td style={tdStyle}>
                       <span style={badgeStyle(priority.color)}>{priority.label}</span>
                     </td>
-                    <td style={tdStyle}>{order.master_name || 'Не назначен'}</td>
+                    <td style={tdStyle}>{order?.master_name || order?.assigned_master || 'Не назначен'}</td>
                     <td style={tdStyle}>
-                      {order.final_total ? `${order.final_total.toLocaleString('ru-RU')} ₽` : '—'}
+                      {order?.final_total ? `${Number(order.final_total).toLocaleString('ru-RU')} ₽` : '—'}
                     </td>
                     <td style={tdStyle}>
-                      {new Date(order.created_at).toLocaleDateString('ru-RU')}
+                      {order?.created_at ? new Date(order.created_at).toLocaleDateString('ru-RU') : '—'}
                     </td>
                   </tr>
                 );
