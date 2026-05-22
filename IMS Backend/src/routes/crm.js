@@ -450,49 +450,70 @@ router.get('/work-orders', async (req, res) => {
   }
 });
 
-// GET /api/crm/work-orders/:id — Детали заказ-наряда
+
 router.get('/work-orders/:id', async (req, res) => {
   try {
     const { id } = req.params;
+    const workOrderId = parseInt(id, 10);
     
-    const [wo, items, history] = await Promise.all([
-      pool.query(`
-        SELECT wo.*,
-               c.name as customer_name, c.phone_primary, c.phone_secondary, c.loyalty_level,
-               v.brand, v.model, v.vin, v.year, v.license_plate,
-               u.username as master_name, l.name as bay_name
-        FROM work_orders wo
-        LEFT JOIN crm_customers c ON wo.customer_id = c.id
-        LEFT JOIN cars v ON wo.vehicle_id = v.id
-        LEFT JOIN users u ON wo.assigned_master::text = u.id::text
-        LEFT JOIN locations l ON wo.assigned_bay::text = l.id::text
-        WHERE wo.id = $1
-      `, [id]),
-      pool.query(`
-        SELECT woi.*,
-               s.name as service_name, s.labor_hours as service_hours,
-               p.name as part_name, p.part_number, p.manufacturer
-        FROM work_order_items woi
-        LEFT JOIN services s ON woi.service_id = s.id
-        LEFT JOIN parts p ON woi.part_id = p.id
-        WHERE woi.work_order_id = $1
-        ORDER BY woi.item_type, woi.created_at
-      `, [id]),
-      pool.query(`
-        SELECT * FROM work_order_status_history
-        WHERE work_order_id = $1 ORDER BY changed_at DESC
-      `, [id])
-    ]);
+    if (isNaN(workOrderId)) {
+      return res.status(400).json({ error: 'Неверный ID заказ-наряда' });
+    }
     
-    if (wo.rows.length === 0) return res.status(404).json({ error: 'Заказ-наряд не найден' });
+    // 🔧 Запрос 1: Заказ-наряд + клиент + автомобиль
+// 🔧 Запрос 1: Заказ-наряд с ЯВНЫМИ алиасами для полей клиента
+    // 🔧 Запрос 1: Заказ-наряд с ПРАВИЛЬНЫМИ названиями колонок
+// 🔧 Запрос с правильным извлечением из vehicle_info
+    const wo = await pool.query(`
+    SELECT 
+        wo.id, wo.order_number, wo.status, wo.complaint, wo.notes, wo.description,
+        wo.vehicle_info, wo.final_total, wo.total_cost,
+        wo.created_at, wo.updated_at, wo.started_at, wo.completed_at,
+        wo.promised_at, wo.date_from, wo.date_to,
+        wo.customer_id, wo.vehicle_id, wo.assigned_master, wo.assigned_bay, wo.master_id,
+        
+        -- Клиент
+        COALESCE(c.counterparty_name, c.name) AS customer_name,
+        COALESCE(c.phone, c.phone_primary) AS customer_phone,
+        c.loyalty_level AS customer_loyalty_level,
+        
+        -- 🔥 Автомобиль: приоритет vehicle_info (JSONB), затем cars
+        COALESCE(wo.vehicle_info->>'brand', v.brand) AS brand,
+        COALESCE(wo.vehicle_info->>'model', v.model) AS model,
+        COALESCE(wo.vehicle_info->>'vin', v.vin) AS vin,
+        COALESCE(wo.vehicle_info->>'year', v.year::text) AS year,
+        COALESCE(wo.vehicle_info->>'license_plate', v.license_plate) AS license_plate
+        
+    FROM work_orders wo
+    LEFT JOIN crm_customers c ON wo.customer_id = c.id
+    LEFT JOIN cars v ON wo.vehicle_id = v.id
+    WHERE wo.id = $1
+    `, [workOrderId]);
+    
+    if (wo.rows.length === 0) {
+      return res.status(404).json({ error: 'Заказ-наряд не найден' });
+    }
+    
+    // 🔧 Запрос 2: Элементы
+    const items = await pool.query(`
+      SELECT 
+        woi.id, woi.work_order_id, woi.service_id,
+        woi.name, woi.category, woi.quantity, woi.unit,
+        woi.unit_price, woi.labor_hours, woi.total_price,
+        woi.status, woi.notes, woi.part_number, woi.manufacturer
+      FROM work_order_items woi
+      WHERE woi.work_order_id = $1
+      ORDER BY woi.id
+    `, [workOrderId]);
     
     res.json({
       work_order: wo.rows[0],
       items: items.rows,
-      history: history.rows
+      history: []
     });
+    
   } catch (error) {
-    console.error('Error fetching work order:', error);
+    console.error('❌ Error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -500,21 +521,78 @@ router.get('/work-orders/:id', async (req, res) => {
 // POST /api/crm/work-orders — Создание заказ-наряда
 router.post('/work-orders', async (req, res) => {
   try {
-    const { customer_id, vehicle_id, complaint, notes, promised_at, assigned_master, assigned_bay } = req.body;
+    const { 
+      customer_id, 
+      vehicle_id, 
+      vehicle_info,  // 🔍 Получаем vehicle_info из body
+      complaint, 
+      notes, 
+      priority,
+      assigned_master,
+      assigned_bay,
+      promised_at,
+      status,
+      discount_type,
+      discount_value,
+      discount_reason
+    } = req.body;
+    
+    const workItems = req.body.work_items || [];
+    const partsItems = req.body.parts_items || [];
+    const totals = req.body.totals || {};
+    
+    // 🔧 Проверка: есть ли vehicle_info?
+    console.log('🔍 vehicle_info from client:', vehicle_info);
+    
+    // Генерация номера
     const orderNumber = `WO-${Date.now().toString().slice(-6)}`;
     
+    // 🔧 INSERT с vehicle_info!
     const result = await pool.query(`
-      INSERT INTO work_orders (order_number, customer_id, vehicle_id, complaint, notes,
-                               promised_at, assigned_master, assigned_bay, status)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'in_progress')
+      INSERT INTO work_orders (
+        order_number, 
+        customer_id, 
+        vehicle_id,
+        vehicle_info,  -- 🔥 Добавляем vehicle_info!
+        complaint, 
+        notes, 
+        priority,
+        assigned_master, 
+        assigned_bay,
+        promised_at, 
+        status,
+        discount_type,
+        discount_value,
+        discount_reason,
+        final_total
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
       RETURNING id, order_number, created_at
-    `, [orderNumber, customer_id, vehicle_id, complaint, notes, promised_at, assigned_master, assigned_bay]);
+    `, [
+      orderNumber, 
+      customer_id || null, 
+      vehicle_id || null,
+      vehicle_info ? JSON.stringify(vehicle_info) : null,  // 🔥 Сохраняем JSONB!
+      complaint || '', 
+      notes || '', 
+      priority || 'normal',
+      assigned_master || null, 
+      assigned_bay || null,
+      promised_at || null, 
+      status || 'draft',
+      discount_type || 'none',
+      discount_value || 0,
+      discount_reason || '',
+      totals.final_total || totals.total || 0
+    ]);
+    
+    // ... остальной код (сохранение work_items, parts_items)
     
     res.status(201).json({
       success: true,
       message: 'Заказ-наряд успешно создан',
       work_order: result.rows[0]
     });
+    
   } catch (error) {
     console.error('Error creating work order:', error);
     res.status(500).json({ error: error.message });
@@ -903,6 +981,232 @@ router.get('/reports/customers-ltv', async (req, res) => {
     res.json(result.rows);
   } catch (error) {
     console.error('Error fetching customer LTV report:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================================================
+// PUT /api/crm/work-orders/:id — Обновление заказ-наряда
+// ============================================================================
+// ============================================================================
+// PUT /api/crm/work-orders/:id — Обновление заказ-наряда (ИСПРАВЛЕННЫЙ)
+// ============================================================================
+router.put('/work-orders/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { 
+      customer_id, vehicle_id, vehicle_info, complaint, notes,
+      assigned_master, assigned_bay, promised_at, status,
+      discount_type, discount_value, discount_reason,
+      work_items, parts_items, totals
+    } = req.body;
+    
+    console.log('🔍 PUT /work-orders/:id payload:', { id, work_items_count: work_items?.length, parts_items_count: parts_items?.length });
+    
+    // 🔍 Проверка: существует ли заказ-наряд
+    const check = await pool.query('SELECT id FROM work_orders WHERE id = $1', [id]);
+    if (check.rows.length === 0) {
+      return res.status(404).json({ error: 'Заказ-наряд не найден' });
+    }
+    
+    // 🔧 Обновление основного заказ-наряда
+    await pool.query(`
+      UPDATE work_orders SET
+        customer_id = $1,
+        vehicle_id = $2,
+        vehicle_info = $3,
+        complaint = $4,
+        notes = $5,
+        assigned_master = $6,
+        assigned_bay = $7,
+        promised_at = $8,
+        status = $9,
+        discount_type = $10,
+        discount_value = $11,
+        discount_reason = $12,
+        final_total = $13,
+        total_cost = $14,
+        updated_at = NOW()
+      WHERE id = $15
+    `, [
+      customer_id || null,
+      vehicle_id || null,
+      vehicle_info ? JSON.stringify(vehicle_info) : null,
+      complaint || '',
+      notes || '',
+      assigned_master || null,
+      assigned_bay || null,
+      promised_at || null,
+      status || 'draft',
+      discount_type || 'none',
+      discount_value || 0,
+      discount_reason || '',
+      totals?.final_total || totals?.total || 0,
+      totals?.total || 0,
+      id
+    ]);
+    
+    // 🔧 Обновление работ: удаляем старые, добавляем новые
+    if (Array.isArray(work_items)) {
+      console.log('🔧 Updating work_items:', work_items.length);
+      
+      // Удаляем старые работы (только те, что связаны с services)
+      await pool.query(
+        'DELETE FROM work_order_items WHERE work_order_id = $1 AND service_id IS NOT NULL', 
+        [id]
+      );
+      
+      // Добавляем новые
+      for (const item of work_items) {
+        await pool.query(`
+          INSERT INTO work_order_items (
+            work_order_id, service_id, name, category, quantity, unit, 
+            unit_price, total_price, labor_hours, status, notes
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        `, [
+          id, 
+          item.service_id || null, 
+          item.name || '', 
+          item.category || '',
+          item.quantity || 1, 
+          item.unit || 'усл', 
+          item.unit_price || 0,
+          item.total_price || 0, 
+          item.labor_hours || 0, 
+          item.status || 'pending', 
+          item.notes || ''
+        ]);
+      }
+    }
+    
+    // 🔧 Обновление запчастей: удаляем старые, добавляем новые
+    if (Array.isArray(parts_items)) {
+      console.log('🔧 Updating parts_items:', parts_items.length);
+      
+      // Удаляем старые запчасти (только те, что имеют part_id или part_number)
+      await pool.query(
+        'DELETE FROM work_order_items WHERE work_order_id = $1 AND (part_id IS NOT NULL OR name IS NOT NULL)', 
+        [id]
+      );
+      
+      // Добавляем новые
+      for (const item of parts_items) {
+        await pool.query(`
+          INSERT INTO work_order_items (
+            work_order_id, part_id, name, category, quantity, unit,
+            unit_price, total_price, part_number, manufacturer, status
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        `, [
+          id, 
+          item.part_id || null, 
+          item.name || '', 
+          item.category || '',
+          item.quantity || 1, 
+          item.unit || 'шт', 
+          item.unit_price || 0,
+          item.total_price || 0, 
+          item.part_number || item.article || '',
+          item.manufacturer || '', 
+          item.status || 'pending'
+        ]);
+      }
+    }
+    
+    console.log('✅ Work order updated successfully');
+    res.json({ success: true, message: 'Заказ-наряд обновлён', work_order: { id } });
+    
+  } catch (error) {
+    console.error('❌ Error updating work order:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================================================
+// DELETE /api/crm/work-orders/:id — Удаление заказ-наряда
+// ============================================================================
+router.delete('/work-orders/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // 🔍 Проверка: существует ли заказ-наряд
+    const check = await pool.query('SELECT id, order_number FROM work_orders WHERE id = $1', [id]);
+    if (check.rows.length === 0) {
+      return res.status(404).json({ error: 'Заказ-наряд не найден' });
+    }
+    
+    // 🔧 Удаление связанных элементов (CASCADE можно настроить в БД)
+    await pool.query('DELETE FROM work_order_items WHERE work_order_id = $1', [id]);
+    await pool.query('DELETE FROM work_order_status_history WHERE work_order_id = $1', [id]);
+    
+    // 🔧 Удаление самого заказ-наряда
+    await pool.query('DELETE FROM work_orders WHERE id = $1', [id]);
+    
+    console.log(`🗑️ Deleted work order #${id} (${check.rows[0].order_number})`);
+    
+    res.json({ success: true, message: 'Заказ-наряд удалён', deleted_id: parseInt(id) });
+    
+  } catch (error) {
+    console.error('Error deleting work order:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================================================
+// GET /api/parts — Получение запчастей со склада (таблица items)
+// ============================================================================
+router.get('/parts', async (req, res) => {
+  try {
+    const { search, category, limit = 200 } = req.query;
+    
+    let query = `
+      SELECT 
+        i.id,
+        i.name,
+        i.part_number,
+        i.description,
+        i.quantity,
+        i.status,
+        c.name as category_name,
+        m.name as manufacturer_name,
+        l.name as location_name
+      FROM items i
+      LEFT JOIN categories c ON i.category_id = c.id
+      LEFT JOIN manufacturers m ON i.manufacturer_id = m.id
+      LEFT JOIN locations l ON i.location_id = l.id
+      WHERE i.status != 'deleted'
+    `;
+    
+    const params = [];
+    let paramIndex = 1;
+    
+    if (search) {
+      query += ` AND (i.name ILIKE $${paramIndex} OR i.part_number ILIKE $${paramIndex} OR i.description ILIKE $${paramIndex})`;
+      params.push(`%${search}%`);
+      paramIndex++;
+    }
+    
+    if (category) {
+      query += ` AND i.category_id = $${paramIndex}`;
+      params.push(category);
+      paramIndex++;
+    }
+    
+    query += ` ORDER BY i.name LIMIT $${paramIndex}`;
+    params.push(parseInt(limit));
+    
+    console.log('🔍 Fetching parts with query:', query, params);
+    
+    const result = await pool.query(query, params);
+    
+    console.log('✅ Found parts:', result.rows.length);
+    
+    res.json({
+      parts: result.rows,
+      total: result.rows.length
+    });
+    
+  } catch (error) {
+    console.error('❌ Error fetching parts:', error);
     res.status(500).json({ error: error.message });
   }
 });

@@ -2,15 +2,19 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
-function WorkOrderForm({ token, orderId = null }) {
+function WorkOrderForm({ token }) {
   const navigate = useNavigate();
+  const { id } = useParams(); // 🔥 Получаем id из URL (например, /crm/work-orders/3/edit)
+  
   const [order, setOrder] = useState(null);
   const [customers, setCustomers] = useState([]);
   const [services, setServices] = useState([]);
   const [masters, setMasters] = useState([]);
+  const [warehouseParts, setWarehouseParts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showServiceSelector, setShowServiceSelector] = useState(false);
+  const [showPartsSelector, setShowPartsSelector] = useState(false);
   
   const [formData, setFormData] = useState({
     customer_id: '',
@@ -21,14 +25,16 @@ function WorkOrderForm({ token, orderId = null }) {
     assigned_master: '',
     promised_at: '',
     status: 'draft',
-    // 🔧 Поля для скидки
-    discount_type: 'percent',        // 'percent' | 'fixed' | 'loyalty' | 'none'
-    discount_value: 0,               // значение скидки (%) или сумма
-    discount_reason: ''              // комментарий к скидке
+    discount_type: 'percent',
+    discount_value: 0,
+    discount_reason: ''
   });
 
   const [workItems, setWorkItems] = useState([]);
   const [partsItems, setPartsItems] = useState([]);
+
+  // 🔧 Определяем режим: создание или редактирование
+  const isEditMode = !!id;
 
   // 🔧 Хелпер: извлекает массив из ответа API
   const extractArray = (data, possibleKeys = []) => {
@@ -36,7 +42,7 @@ function WorkOrderForm({ token, orderId = null }) {
     for (const key of possibleKeys) {
       if (Array.isArray(data?.[key])) return data[key];
     }
-    for (const key of ['customers', 'services', 'users', 'data', 'rows', 'items', 'results']) {
+    for (const key of ['customers', 'services', 'users', 'data', 'rows', 'items', 'results', 'parts']) {
       if (Array.isArray(data?.[key])) return data[key];
     }
     return [];
@@ -56,14 +62,18 @@ function WorkOrderForm({ token, orderId = null }) {
         if (servicesRes.ok) setServices(extractArray(await servicesRes.json(), ['services']));
         if (mastersRes.ok) setMasters(extractArray(await mastersRes.json(), ['users', 'masters']));
 
-        if (orderId) {
-          const orderRes = await fetch(`/api/crm/work-orders/${orderId}`, {
+        // 🔥 Загружаем данные заказ-наряда ТОЛЬКО если есть id (режим редактирования)
+        if (isEditMode && id) {
+          console.log('🔍 Loading order for edit:', id);
+          const orderRes = await fetch(`/api/crm/work-orders/${id}`, {
             headers: { 'Authorization': `Bearer ${token}` }
           });
           if (orderRes.ok) {
             const data = await orderRes.json();
             const orderData = data.order || data.work_order || data;
             setOrder(orderData);
+            
+            // 🔥 Заполняем форму данными из БД
             setFormData({
               customer_id: orderData.customer_id || '',
               vehicle_info: orderData.vehicle_info || {},
@@ -77,8 +87,15 @@ function WorkOrderForm({ token, orderId = null }) {
               discount_value: 0,
               discount_reason: ''
             });
+            
             if (orderData.work_items) setWorkItems(orderData.work_items);
             if (orderData.parts_items) setPartsItems(orderData.parts_items);
+            
+            console.log('✅ Order loaded:', orderData);
+          } else {
+            console.error('❌ Failed to load order');
+            alert('⚠️ Не удалось загрузить заказ-наряд');
+            navigate('/crm/work-orders');
           }
         }
       } catch (err) {
@@ -89,16 +106,49 @@ function WorkOrderForm({ token, orderId = null }) {
       }
     };
     loadData();
-  }, [token, orderId]);
+  }, [token, id, isEditMode]); // 🔥 Зависимость от id
 
-  // 🔧 БЕЗОПАСНЫЕ МАССИВЫ — ОБЪЯВЛЯЕМ ПЕРЕД useMemo!
+  // 🔧 Загрузка запчастей со склада при открытии модалки
+  useEffect(() => {
+    if (showPartsSelector) {
+      console.log('🔍 Opening parts selector, fetching...');
+      
+      const fetchWarehouseParts = async () => {
+        try {
+          const response = await fetch('/api/parts?limit=200', {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          
+          console.log('📦 Parts API response status:', response.status);
+          
+          if (response.ok) {
+            const data = await response.json();
+            console.log('📦 Parts API data:', { 
+              total: data.total, 
+              parts_count: data.parts?.length,
+              first_part: data.parts?.[0]
+            });
+            setWarehouseParts(data.parts || []);
+          } else {
+            const err = await response.json();
+            console.error('❌ Parts API error:', err);
+          }
+        } catch (err) {
+          console.error('❌ Error fetching warehouse parts:', err);
+        }
+      };
+      fetchWarehouseParts();
+    }
+  }, [showPartsSelector, token]);
+
+  // 🔧 БЕЗОПАСНЫЕ МАССИВЫ
   const safeCustomers = Array.isArray(customers) ? customers : [];
   const safeMasters = Array.isArray(masters) ? masters : [];
   const safeServices = Array.isArray(services) ? services : [];
   const safeWorkItems = Array.isArray(workItems) ? workItems : [];
   const safePartsItems = Array.isArray(partsItems) ? partsItems : [];
 
-  // Подсчёт итогов работ и запчастей
+  // Подсчёт итогов
   const totals = useMemo(() => {
     const laborTotal = safeWorkItems.reduce((sum, item) => 
       sum + ((item.quantity || 1) * (item.unit_price || 0)), 0);
@@ -107,23 +157,20 @@ function WorkOrderForm({ token, orderId = null }) {
     return { labor: laborTotal, parts: partsTotal, total: laborTotal + partsTotal };
   }, [safeWorkItems, safePartsItems]);
 
-  // 🔧 Расчёт скидки и финальной суммы
+  // 🔧 Расчёт скидки
   const pricing = useMemo(() => {
     const subtotal = totals.total;
     let discountAmount = 0;
     
     if (formData.discount_type === 'loyalty' && formData.customer_id) {
-      // 🔹 Автоматическая скидка по лояльности
       const customer = safeCustomers.find(c => c.id == formData.customer_id);
       const loyaltyRates = { bronze: 0, silver: 5, gold: 10, platinum: 15 };
       const rate = customer?.loyalty_level ? loyaltyRates[customer.loyalty_level] || 0 : 0;
       discountAmount = subtotal * (rate / 100);
     } else if (formData.discount_type === 'percent') {
-      // 🔹 Скидка в процентах
       const percent = parseFloat(formData.discount_value) || 0;
       discountAmount = subtotal * (Math.min(percent, 100) / 100);
     } else if (formData.discount_type === 'fixed') {
-      // 🔹 Фиксированная скидка (не больше суммы заказа)
       const fixed = parseFloat(formData.discount_value) || 0;
       discountAmount = Math.min(fixed, subtotal);
     }
@@ -138,7 +185,7 @@ function WorkOrderForm({ token, orderId = null }) {
     };
   }, [totals.total, formData.discount_type, formData.discount_value, formData.customer_id, safeCustomers]);
 
-  // Группировка услуг по категориям
+  // Группировка услуг
   const servicesByCategory = useMemo(() => {
     if (!Array.isArray(services) || services.length === 0) return {};
     const grouped = {};
@@ -168,9 +215,9 @@ function WorkOrderForm({ token, orderId = null }) {
     }]);
   };
 
-  const updateWorkItem = (id, field, value) => {
+  const updateWorkItem = (itemId, field, value) => {
     setWorkItems(items => items.map(item => {
-      if (item.id !== id) return item;
+      if (item.id !== itemId) return item;
       const updated = { ...item, [field]: value };
       if (field === 'quantity' || field === 'unit_price') {
         const qty = field === 'quantity' ? value : item.quantity || 1;
@@ -181,7 +228,7 @@ function WorkOrderForm({ token, orderId = null }) {
     }));
   };
 
-  const removeWorkItem = (id) => setWorkItems(items => items.filter(item => item.id !== id));
+  const removeWorkItem = (itemId) => setWorkItems(items => items.filter(item => item.id !== itemId));
 
   // Обработчики для запчастей
   const addPartItem = (template = {}) => {
@@ -189,20 +236,20 @@ function WorkOrderForm({ token, orderId = null }) {
       id: Date.now() + Math.random(),
       part_id: template.part_id || null,
       name: template.name || '',
-      article: template.article || '',
+      article: template.article || template.part_number || '',
       quantity: template.quantity || 1,
       unit: template.unit || 'шт',
       unit_price: template.unit_price || 0,
       total_price: template.unit_price || 0,
-      warehouse_location: '',
+      warehouse_location: template.location_name || '',
       status: 'pending',
       ...template
     }]);
   };
 
-  const updatePartItem = (id, field, value) => {
+  const updatePartItem = (itemId, field, value) => {
     setPartsItems(items => items.map(item => {
-      if (item.id !== id) return item;
+      if (item.id !== itemId) return item;
       const updated = { ...item, [field]: value };
       if (field === 'quantity' || field === 'unit_price') {
         const qty = field === 'quantity' ? value : item.quantity || 1;
@@ -213,7 +260,7 @@ function WorkOrderForm({ token, orderId = null }) {
     }));
   };
 
-  const removePartItem = (id) => setPartsItems(items => items.filter(item => item.id !== id));
+  const removePartItem = (itemId) => setPartsItems(items => items.filter(item => item.id !== itemId));
 
   // Отправка формы
   const handleSubmit = async (e) => {
@@ -224,31 +271,43 @@ function WorkOrderForm({ token, orderId = null }) {
     }
     setSaving(true);
     try {
-        const payload = { 
+      console.log('🔍 Sending payload:', {
+        work_items_count: workItems.length,
+        parts_items_count: partsItems.length,
+        first_work: workItems[0],
+        first_part: partsItems[0]
+      });
+
+      const payload = { 
         customer_id: formData.customer_id || null,
         vehicle_id: formData.vehicle_id || null,
         complaint: formData.complaint || '',
         notes: formData.notes || '',
         priority: formData.priority || 'normal',
-        assigned_master: formData.assigned_master || null,  // 🔧 Ключевое исправление
-        assigned_bay: formData.assigned_bay || null,        // 🔧 И здесь
+        assigned_master: formData.assigned_master || null,
+        assigned_bay: formData.assigned_bay || null,
         promised_at: formData.promised_at || null,
         status: formData.status || 'draft',
         vehicle_info: formData.vehicle_info || {},
         discount_type: formData.discount_type || 'none',
         discount_value: formData.discount_value || 0,
         discount_reason: formData.discount_reason || '',
-        work_items: workItems, 
-        parts_items: partsItems, 
+        
+        // 🔥 Явно преобразуем в массивы (защита от undefined)
+        work_items: Array.isArray(workItems) ? workItems : [],
+        parts_items: Array.isArray(partsItems) ? partsItems : [],
+        
         totals: { 
-            ...totals, 
-            currency: 'RUB',
-            discount_amount: pricing.discount,
-            final_total: pricing.final
+          ...totals, 
+          currency: 'RUB',
+          discount_amount: pricing.discount,
+          final_total: pricing.final
         }
-        };
-      const url = orderId ? `/api/crm/work-orders/${orderId}` : '/api/crm/work-orders';
-      const method = orderId ? 'PUT' : 'POST';
+      };
+      
+      // 🔥 Используем id из useParams() для определения режима
+      const url = isEditMode ? `/api/crm/work-orders/${id}` : '/api/crm/work-orders';
+      const method = isEditMode ? 'PUT' : 'POST';
       
       const response = await fetch(url, {
         method,
@@ -258,8 +317,8 @@ function WorkOrderForm({ token, orderId = null }) {
       
       if (response.ok) {
         const data = await response.json();
-        const newId = data.work_order?.id || data.order?.id || orderId;
-        navigate(`/crm/work-orders/${newId}`, { state: { saved: true } });
+        const savedId = data.work_order?.id || data.order?.id || id;
+        navigate(`/crm/work-orders/${savedId}`, { state: { saved: true } });
       } else {
         const err = await response.json();
         alert(`❌ Ошибка: ${err.message || 'Не удалось сохранить'}`);
@@ -374,6 +433,143 @@ function WorkOrderForm({ token, orderId = null }) {
     );
   };
 
+  // 🔧 Встроенная модалка выбора запчастей со склада
+  const PartsSelectorInline = ({ parts, onClose, onSelect }) => {
+    const [search, setSearch] = useState('');
+    const [selected, setSelected] = useState([]);
+
+    const filteredParts = useMemo(() => {
+      if (!search.trim()) return parts.slice(0, 100);
+      const q = search.toLowerCase();
+      return parts.filter(p => 
+        p.name?.toLowerCase().includes(q) || 
+        p.part_number?.toLowerCase().includes(q) ||
+        p.description?.toLowerCase().includes(q) ||
+        p.manufacturer_name?.toLowerCase().includes(q)
+      ).slice(0, 100);
+    }, [parts, search]);
+
+    const togglePart = (part) => {
+      setSelected(prev => {
+        const exists = prev.find(p => p.id === part.id);
+        return exists ? prev.filter(p => p.id !== part.id) : [...prev, part];
+      });
+    };
+
+    const confirm = () => {
+      if (selected.length > 0) onSelect(selected);
+      onClose();
+    };
+
+    return (
+      <div style={{
+        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+        backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex',
+        alignItems: 'center', justifyContent: 'center', zIndex: 10000,
+        padding: '20px'
+      }} onClick={(e) => e.target === e.currentTarget && onClose()}>
+        <div style={{
+          backgroundColor: 'white', borderRadius: '12px', width: '100%',
+          maxWidth: '900px', maxHeight: '90vh', display: 'flex',
+          flexDirection: 'column', boxShadow: '0 20px 60px rgba(0,0,0,0.4)'
+        }} onClick={e => e.stopPropagation()}>
+          
+          <div style={{ padding: '15px 20px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h3 style={{ margin: 0, fontSize: '18px' }}>📦 Выбор запчастей со склада</h3>
+            <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '28px', cursor: 'pointer', color: '#666' }}>×</button>
+          </div>
+
+          <div style={{ padding: '12px 20px', borderBottom: '1px solid #eee' }}>
+            <input 
+              type="text" 
+              placeholder="🔍 Поиск по названию, артикулу или описанию..." 
+              value={search} 
+              onChange={e => setSearch(e.target.value)}
+              style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '14px' }}
+            />
+          </div>
+
+          <div style={{ flex: 1, overflowY: 'auto', padding: '10px 20px', maxHeight: '45vh' }}>
+            {filteredParts.length === 0 ? (
+              <p style={{ textAlign: 'center', color: '#999', padding: '30px' }}>🔍 Запчасти не найдены</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {filteredParts.map(part => {
+                  const isSelected = selected.some(p => p.id === part.id);
+                  return (
+                    <div 
+                      key={part.id} 
+                      onClick={() => togglePart(part)}
+                      style={{
+                        padding: '12px 15px',
+                        border: `2px solid ${isSelected ? '#e67e22' : '#eee'}`,
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        backgroundColor: isSelected ? '#fff5f5' : 'white',
+                        transition: 'all 0.15s',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                      }}
+                    >
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: '500' }}>
+                          {part.name}
+                          {part.part_number && (
+                            <span style={{ marginLeft: '8px', fontSize: '12px', color: '#999', fontFamily: 'monospace' }}>
+                              [{part.part_number}]
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: '13px', color: '#666', marginTop: '4px' }}>
+                          {part.manufacturer_name && <span>🏭 {part.manufacturer_name} • </span>}
+                          {part.category_name && <span>📁 {part.category_name} • </span>}
+                          {part.quantity !== null && (
+                            <span style={{ marginLeft: '8px', color: part.quantity > 0 ? '#27ae60' : '#e74c3c' }}>
+                              📦 Остаток: {part.quantity} шт
+                            </span>
+                          )}
+                          {part.location_name && <span> • 📍 {part.location_name}</span>}
+                        </div>
+                        {part.description && (
+                          <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>
+                            {part.description}
+                          </div>
+                        )}
+                      </div>
+                      {isSelected && (
+                        <span style={{ color: '#e67e22', fontWeight: 'bold', fontSize: '18px' }}>✓</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div style={{ padding: '15px 20px', borderTop: '1px solid #eee', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+            <button onClick={onClose} style={{ padding: '10px 20px', backgroundColor: '#95a5a6', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>Отмена</button>
+            <button 
+              onClick={confirm} 
+              disabled={selected.length === 0}
+              style={{ 
+                padding: '10px 20px', 
+                backgroundColor: selected.length === 0 ? '#bdc3c7' : '#e67e22', 
+                color: 'white', 
+                border: 'none', 
+                borderRadius: '6px', 
+                cursor: selected.length === 0 ? 'not-allowed' : 'pointer',
+                fontWeight: '500'
+              }}
+            >
+              Добавить ({selected.length})
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <div style={{ padding: '40px', textAlign: 'center', color: '#666' }}>
@@ -389,8 +585,14 @@ function WorkOrderForm({ token, orderId = null }) {
       {/* 🔹 Заголовок */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '10px' }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: '24px' }}>{orderId ? '✏️ Редактировать заказ-наряд' : '➕ Новый заказ-наряд'}</h1>
-          {order && <span style={{ fontSize: '14px', color: '#666' }}>№{order.order_number} • {new Date(order.created_at).toLocaleDateString('ru-RU')}</span>}
+          <h1 style={{ margin: 0, fontSize: '24px' }}>
+            {isEditMode ? '✏️ Редактировать заказ-наряд' : '➕ Новый заказ-наряд'}
+          </h1>
+          {order && (
+            <span style={{ fontSize: '14px', color: '#666' }}>
+              №{order.order_number} • {new Date(order.created_at).toLocaleDateString('ru-RU')}
+            </span>
+          )}
         </div>
         <button onClick={() => navigate(-1)} style={{ padding: '10px 20px', backgroundColor: '#95a5a6', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '14px' }}>← Назад</button>
       </div>
@@ -403,7 +605,7 @@ function WorkOrderForm({ token, orderId = null }) {
             <option value="">Выберите клиента...</option>
             {safeCustomers.map(c => (
               <option key={c.id} value={c.id}>
-                {c.counterparty_name || c.name || 'Частное лицо'} • {c.phone_primary || c.phone || 'нет телефона'}
+                {c.counterparty_name || c.name || 'Частное лицо'} • {c.phone || c.phone_primary || 'нет телефона'}
                 {c.loyalty_level && c.loyalty_level !== 'bronze' && ` • ${getLoyaltyEmoji(c.loyalty_level)} ${c.loyalty_level}`}
               </option>
             ))}
@@ -512,7 +714,10 @@ function WorkOrderForm({ token, orderId = null }) {
         <Card title="🔩 Запчасти">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
             <strong>Добавленные запчасти</strong>
-            <button type="button" onClick={() => addPartItem()} style={{ ...btnStyle, backgroundColor: '#e67e22' }}>➕ Добавить запчасть</button>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button type="button" onClick={() => setShowPartsSelector(true)} style={{ ...btnStyle, backgroundColor: '#e67e22' }}>📦 Из справочника</button>
+              <button type="button" onClick={() => addPartItem()} style={{ ...btnStyle, backgroundColor: '#3498db' }}>➕ Вручную</button>
+            </div>
           </div>
           {safePartsItems.length === 0 ? (
             <p style={{ color: '#999', fontStyle: 'italic', padding: '20px', textAlign: 'center' }}>Запчасти не добавлены</p>
@@ -673,7 +878,7 @@ function WorkOrderForm({ token, orderId = null }) {
         <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', paddingTop: '10px' }}>
           <button type="button" onClick={() => navigate(-1)} style={{ ...btnStyle, backgroundColor: '#95a5a6' }} disabled={saving}>Отмена</button>
           <button type="submit" style={{ ...btnStyle, backgroundColor: '#27ae60', minWidth: '180px' }} disabled={saving}>
-            {saving ? '⏳ Сохранение...' : (orderId ? '💾 Сохранить изменения' : '📄 Создать заказ-наряд')}
+            {saving ? '⏳ Сохранение...' : (isEditMode ? '💾 Сохранить изменения' : '📄 Создать заказ-наряд')}
           </button>
         </div>
       </form>
@@ -694,6 +899,32 @@ function WorkOrderForm({ token, orderId = null }) {
               labor_hours: s?.labor_hours || 0
             }));
             setShowServiceSelector(false);
+          }}
+        />
+      )}
+
+      {/* 🔧 Встроенная модалка выбора запчастей */}
+      {showPartsSelector && (
+        <PartsSelectorInline
+          parts={warehouseParts}
+          onClose={() => setShowPartsSelector(false)}
+          onSelect={(selectedParts) => {
+            selectedParts.forEach(part => {
+              addPartItem({
+                part_id: part.id,
+                name: part.name,
+                part_number: part.part_number,
+                article: part.part_number,
+                category: part.category_name,
+                manufacturer: part.manufacturer_name,
+                quantity: 1,
+                unit: 'шт',
+                unit_price: 0,
+                total_price: 0,
+                location_name: part.location_name
+              });
+            });
+            setShowPartsSelector(false);
           }}
         />
       )}
