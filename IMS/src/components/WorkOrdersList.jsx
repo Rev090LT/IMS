@@ -166,7 +166,7 @@ function WorkOrdersList({ token }) {
           ➕ Новый заказ-наряд
         </button>
         <button 
-        onClick={() => navigate(-1)} 
+        onClick={() => navigate('/dashboard')} 
         style={{ 
             padding: '10px 18px', 
             backgroundColor: '#95a5a6', 

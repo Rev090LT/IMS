@@ -58,6 +58,23 @@ function CrmDashboard({ token }) {
         >
           ➕ Новый заказ-наряд
         </button>
+                <button 
+        onClick={() => navigate('/dashboard')} 
+        style={{ 
+            padding: '10px 18px', 
+            backgroundColor: '#95a5a6', 
+            color: 'white', 
+            border: 'none', 
+            borderRadius: '8px', 
+            cursor: 'pointer',
+            fontSize: '14px',
+            transition: 'background 0.2s'
+        }}
+        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#7f8c8d'}
+        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#95a5a6'}
+        >
+        ← Назад
+      </button>
       </div>
 
       {/* Статистика */}
