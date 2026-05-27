@@ -30,15 +30,31 @@ const serviceUpload = multer({
   limits: { fileSize: 50 * 1024 * 1024 }
 });
 
+// ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
+
+async function resolveServiceId(value) {
+  if (!value) return null;
+  if (typeof value === 'number') return value;
+  if (!isNaN(parseInt(value))) return parseInt(value);
+  
+  try {
+    const result = await pool.query(
+      'SELECT id FROM services WHERE service_code = $1 OR name = $1 LIMIT 1',
+      [value]
+    );
+    return result.rows[0]?.id || null;
+  } catch (e) {
+    console.warn('⚠️ Could not resolve service_id:', value);
+    return null;
+  }
+}
+
 // ==================== УСЛУГИ ====================
 
-// POST /api/crm/services/import — Импорт услуг из Excel
-// В обработчике POST /api/crm/services/import:
 router.post('/services/import', serviceUpload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'Файл не загружен' });
     
-    // 🔍 Опции импорта из query/body
     const options = {
       dryRun: req.body.dryRun === 'true' || req.query.dryRun === 'true',
       importGroups: req.body.importGroups === 'true',
@@ -47,18 +63,14 @@ router.post('/services/import', serviceUpload.single('file'), async (req, res) =
     
     const result = await importServicesFromExcel(req.file.path, options);
     
-    fs.unlinkSync(req.file.path);
+    if (req.file?.path) { try { fs.unlinkSync(req.file.path); } catch {} }
     
     res.json({
       success: true,
       message: options.dryRun 
         ? `🔍 Предпросмотр: ${result.imported} будет добавлено, ${result.updated} обновлено`
         : `✅ Импортировано: ${result.imported}, обновлено: ${result.updated}, пропущено: ${result.skipped}`,
-      stats: {
-        ...result,
-        // 🔍 Не показываем все ошибки в предпросмотре, только первые 10
-        errors: result.errors?.slice(0, 10) || []
-      }
+      stats: { ...result, errors: result.errors?.slice(0, 10) || [] }
     });
     
   } catch (error) {
@@ -68,7 +80,6 @@ router.post('/services/import', serviceUpload.single('file'), async (req, res) =
   }
 });
 
-// GET /api/crm/services — Поиск услуг с фильтрацией
 router.get('/services', async (req, res) => {
   try {
     const { search, category, min_hours, max_hours, is_group, limit = 100, offset = 0 } = req.query;
@@ -135,13 +146,11 @@ router.get('/services', async (req, res) => {
   }
 });
 
-// GET /api/crm/services/tree — Иерархия услуг (категории + подкатегории)
 router.get('/services/tree', async (req, res) => {
   try {
     const { include_inactive } = req.query;
     const activeFilter = include_inactive === 'true' ? '' : 'AND is_active = TRUE';
     
-    // Получаем все категории (группы)
     const categories = await pool.query(`
       SELECT DISTINCT category as name, category as id, NULL as parent_id, true as is_group,
              COUNT(*) FILTER (WHERE is_active = TRUE) as services_count
@@ -151,7 +160,6 @@ router.get('/services/tree', async (req, res) => {
       ORDER BY category
     `);
     
-    // Получаем все услуги внутри категорий
     const services = await pool.query(`
       SELECT id, service_code, name, full_name, category as parent_id,
              labor_hours, base_price, false as is_group, is_active
@@ -160,7 +168,6 @@ router.get('/services/tree', async (req, res) => {
       ORDER BY category, name
     `);
     
-    // Формируем дерево
     const tree = categories.rows.map(cat => ({
       ...cat,
       children: services.rows.filter(s => s.parent_id === cat.id)
@@ -173,7 +180,6 @@ router.get('/services/tree', async (req, res) => {
   }
 });
 
-// GET /api/crm/services/categories — Список категорий со статистикой
 router.get('/services/categories', async (req, res) => {
   try {
     const result = await pool.query(`
@@ -194,7 +200,6 @@ router.get('/services/categories', async (req, res) => {
   }
 });
 
-// GET /api/crm/services/stats — Статистика по услугам
 router.get('/services/stats', async (req, res) => {
   try {
     const stats = await getServiceStats();
@@ -205,7 +210,6 @@ router.get('/services/stats', async (req, res) => {
   }
 });
 
-// GET /api/crm/services/:id — Получение услуги по ID
 router.get('/services/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -224,7 +228,6 @@ router.get('/services/:id', async (req, res) => {
   }
 });
 
-// POST /api/crm/services — Создание новой услуги
 router.post('/services', async (req, res) => {
   try {
     const { service_code, name, full_name, category, labor_hours, base_price, comment, additional } = req.body;
@@ -247,7 +250,6 @@ router.post('/services', async (req, res) => {
   }
 });
 
-// PUT /api/crm/services/:id — Обновление услуги
 router.put('/services/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -271,7 +273,6 @@ router.put('/services/:id', async (req, res) => {
   }
 });
 
-// DELETE /api/crm/services/:id — Мягкое удаление услуги
 router.delete('/services/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -288,7 +289,6 @@ router.delete('/services/:id', async (req, res) => {
   }
 });
 
-// POST /api/crm/services/bulk-update — Массовое обновление услуг
 router.post('/services/bulk-update', async (req, res) => {
   try {
     const { service_ids, updates } = req.body;
@@ -330,7 +330,6 @@ router.post('/services/bulk-update', async (req, res) => {
   }
 });
 
-// GET /api/crm/services/search/autocomplete — Автодополнение для поиска услуг
 router.get('/services/search/autocomplete', async (req, res) => {
   try {
     const { q, category, limit = 10 } = req.query;
@@ -355,21 +354,168 @@ router.get('/services/search/autocomplete', async (req, res) => {
   }
 });
 
+// ==================== КОНТРАГЕНТЫ ====================
+
+router.get('/counterparties', async (req, res) => {
+  try {
+    const { search, type, limit = 200 } = req.query;
+    
+    let query = `
+      SELECT id, company_name, fio, phone, email, inn, kpp, type, created_at
+      FROM counterparties WHERE 1=1
+    `;
+    const params = [];
+    let paramIndex = 1;
+    
+    if (search) {
+      query += ` AND (company_name ILIKE $${paramIndex} OR fio ILIKE $${paramIndex} OR inn ILIKE $${paramIndex})`;
+      params.push(`%${search}%`);
+      paramIndex++;
+    }
+    if (type && type !== 'all') {
+      query += ` AND type = $${paramIndex}`;
+      params.push(type);
+      paramIndex++;
+    }
+    
+    query += ` ORDER BY company_name NULLS LAST, fio LIMIT $${paramIndex}`;
+    params.push(parseInt(limit));
+    
+    const result = await pool.query(query, params);
+    res.json({ counterparties: result.rows, total: result.rows.length });
+  } catch (error) {
+    console.error('Error fetching counterparties:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ==================== ЗАКАЗ-НАРЯДЫ ====================
 
-// GET /api/crm/work-orders — Список заказ-нарядов с фильтрацией
+// 🔥 Главный фикс: чистый запрос БЕЗ комментариев внутри SELECT
+router.get('/work-orders/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const workOrderId = parseInt(id, 10);
+
+    if (isNaN(workOrderId)) {
+      return res.status(400).json({ error: 'Неверный ID заказ-наряда' });
+    }
+    
+    console.log('🔍 GET /work-orders/:id - fetching order:', workOrderId);
+
+    const wo = await pool.query(`
+      SELECT 
+        wo.id,
+        wo.order_number,
+        wo.status,
+        wo.complaint,
+        wo.notes,
+        wo.description,
+        wo.vehicle_info,
+        wo.final_total,
+        wo.total_cost,
+        wo.created_at,
+        wo.updated_at,
+        wo.started_at,
+        wo.completed_at,
+        wo.promised_at,
+        wo.date_from,
+        wo.date_to,
+        wo.customer_id,
+        wo.vehicle_id,
+        wo.assigned_master,
+        wo.assigned_bay,
+        wo.master_id,
+        COALESCE(cp.company_name, cp.fio) AS customer_name,
+        cp.phone AS customer_phone,
+        COALESCE(wo.vehicle_info->>'brand', v.brand) AS brand,
+        COALESCE(wo.vehicle_info->>'model', v.model) AS model,
+        COALESCE(wo.vehicle_info->>'vin', v.vin) AS vin,
+        COALESCE(wo.vehicle_info->>'year', v.year::text) AS year,
+        COALESCE(wo.vehicle_info->>'license_plate', v.license_plate) AS license_plate
+      FROM work_orders wo
+      LEFT JOIN counterparties cp ON wo.customer_id = cp.id
+      LEFT JOIN cars v ON wo.vehicle_id = v.id
+      WHERE wo.id = $1
+    `, [workOrderId]);
+    
+    if (wo.rows.length === 0) {
+      console.warn('⚠️ Work order not found:', workOrderId);
+      return res.status(404).json({ error: 'Заказ-наряд не найден' });
+    }
+    
+    console.log('🔧 Fetching work_order_items for order:', workOrderId);
+    
+    const items = await pool.query(`
+      SELECT 
+        woi.id,
+        woi.work_order_id,
+        woi.service_id,
+        woi.name,
+        woi.category,
+        woi.quantity,
+        woi.unit,
+        woi.unit_price,
+        woi.total_price,
+        woi.labor_hours,
+        woi.status,
+        woi.notes,
+        woi.part_number,
+        woi.manufacturer,
+        s.name AS service_name,
+        s.labor_hours AS service_labor_hours,
+        s.base_price AS service_base_price,
+        s.category AS service_category
+      FROM work_order_items woi
+      LEFT JOIN services s ON woi.service_id = s.id
+      WHERE woi.work_order_id = $1
+      ORDER BY woi.id
+    `, [workOrderId]);
+    
+    console.log('✅ Found items:', items.rows.length);
+    
+    // 🔥 Разделяем на работы и запчасти
+    const works = items.rows.filter(item => item.service_id !== null && item.service_id !== undefined);
+    const parts = items.rows.filter(item => item.part_id !== null || item.part_number || item.item_type === 'part');
+    
+    let history = { rows: [] };
+    try {
+      history = await pool.query(`
+        SELECT id, old_status, new_status, notes, changed_at
+        FROM work_order_status_history
+        WHERE work_order_id = $1
+        ORDER BY changed_at DESC
+      `, [workOrderId]);
+    } catch (histErr) {
+      console.warn('⚠️ work_order_status_history not available');
+    }
+    
+    // 🔥 Возвращаем work_items и parts_items отдельно
+    res.json({
+      work_order: wo.rows[0],
+      work_items: works,
+      parts_items: parts,
+      history: history.rows
+    });
+    
+  } catch (error) {
+    console.error('❌ Error fetching work order:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.get('/work-orders', async (req, res) => {
   try {
     const { search, status, customer_id, date_from, date_to, limit = 50, offset = 0 } = req.query;
     
     let query = `
       SELECT wo.id, wo.order_number, wo.status, wo.promised_at, wo.completed_at,
-             wo.vehicle_info, wo.complaint, wo.notes, wo.final_total,
-             c.name as customer_name, c.phone_primary,
-             u.username as master_name,
-             wo.created_at, wo.updated_at
+            wo.vehicle_info, wo.complaint, wo.notes, wo.final_total,
+            cp.company_name, cp.fio, cp.phone,
+            u.username as master_name,
+            wo.created_at, wo.updated_at
       FROM work_orders wo
-      LEFT JOIN crm_customers c ON wo.customer_id = c.id
+      LEFT JOIN counterparties cp ON wo.customer_id = cp.id
       LEFT JOIN users u ON wo.assigned_master::text = u.id::text
       WHERE 1=1
     `;
@@ -450,156 +596,110 @@ router.get('/work-orders', async (req, res) => {
   }
 });
 
-
-router.get('/work-orders/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const workOrderId = parseInt(id, 10);
-    
-    if (isNaN(workOrderId)) {
-      return res.status(400).json({ error: 'Неверный ID заказ-наряда' });
-    }
-    
-    // 🔧 Запрос 1: Заказ-наряд + клиент + автомобиль
-// 🔧 Запрос 1: Заказ-наряд с ЯВНЫМИ алиасами для полей клиента
-    // 🔧 Запрос 1: Заказ-наряд с ПРАВИЛЬНЫМИ названиями колонок
-// 🔧 Запрос с правильным извлечением из vehicle_info
-    const wo = await pool.query(`
-    SELECT 
-        wo.id, wo.order_number, wo.status, wo.complaint, wo.notes, wo.description,
-        wo.vehicle_info, wo.final_total, wo.total_cost,
-        wo.created_at, wo.updated_at, wo.started_at, wo.completed_at,
-        wo.promised_at, wo.date_from, wo.date_to,
-        wo.customer_id, wo.vehicle_id, wo.assigned_master, wo.assigned_bay, wo.master_id,
-        
-        -- Клиент
-        COALESCE(c.counterparty_name, c.name) AS customer_name,
-        COALESCE(c.phone, c.phone_primary) AS customer_phone,
-        c.loyalty_level AS customer_loyalty_level,
-        
-        -- 🔥 Автомобиль: приоритет vehicle_info (JSONB), затем cars
-        COALESCE(wo.vehicle_info->>'brand', v.brand) AS brand,
-        COALESCE(wo.vehicle_info->>'model', v.model) AS model,
-        COALESCE(wo.vehicle_info->>'vin', v.vin) AS vin,
-        COALESCE(wo.vehicle_info->>'year', v.year::text) AS year,
-        COALESCE(wo.vehicle_info->>'license_plate', v.license_plate) AS license_plate
-        
-    FROM work_orders wo
-    LEFT JOIN crm_customers c ON wo.customer_id = c.id
-    LEFT JOIN cars v ON wo.vehicle_id = v.id
-    WHERE wo.id = $1
-    `, [workOrderId]);
-    
-    if (wo.rows.length === 0) {
-      return res.status(404).json({ error: 'Заказ-наряд не найден' });
-    }
-    
-    // 🔧 Запрос 2: Элементы
-    const items = await pool.query(`
-      SELECT 
-        woi.id, woi.work_order_id, woi.service_id,
-        woi.name, woi.category, woi.quantity, woi.unit,
-        woi.unit_price, woi.labor_hours, woi.total_price,
-        woi.status, woi.notes, woi.part_number, woi.manufacturer
-      FROM work_order_items woi
-      WHERE woi.work_order_id = $1
-      ORDER BY woi.id
-    `, [workOrderId]);
-    
-    res.json({
-      work_order: wo.rows[0],
-      items: items.rows,
-      history: []
-    });
-    
-  } catch (error) {
-    console.error('❌ Error:', error.message);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// POST /api/crm/work-orders — Создание заказ-наряда
 router.post('/work-orders', async (req, res) => {
+  const client = await pool.connect();
+  
   try {
+    await client.query('BEGIN');
+    
     const { 
-      customer_id, 
-      vehicle_id, 
-      vehicle_info,  // 🔍 Получаем vehicle_info из body
-      complaint, 
-      notes, 
-      priority,
-      assigned_master,
-      assigned_bay,
-      promised_at,
-      status,
-      discount_type,
-      discount_value,
-      discount_reason
+      customer_id, vehicle_id, vehicle_info, complaint, notes, priority,
+      assigned_master, assigned_bay, promised_at, status,
+      discount_type, discount_value, discount_reason
     } = req.body;
     
-    const workItems = req.body.work_items || [];
-    const partsItems = req.body.parts_items || [];
+    const workItems = Array.isArray(req.body.work_items) ? req.body.work_items : [];
+    const partsItems = Array.isArray(req.body.parts_items) ? req.body.parts_items : [];
     const totals = req.body.totals || {};
     
-    // 🔧 Проверка: есть ли vehicle_info?
-    console.log('🔍 vehicle_info from client:', vehicle_info);
+    console.log('🔍 POST /work-orders payload:', {
+      customer_id, vehicle_id,
+      work_items_count: workItems.length,
+      parts_items_count: partsItems.length
+    });
     
-    // Генерация номера
     const orderNumber = `WO-${Date.now().toString().slice(-6)}`;
     
-    // 🔧 INSERT с vehicle_info!
-    const result = await pool.query(`
+    const orderResult = await client.query(`
       INSERT INTO work_orders (
-        order_number, 
-        customer_id, 
-        vehicle_id,
-        vehicle_info,  -- 🔥 Добавляем vehicle_info!
-        complaint, 
-        notes, 
-        priority,
-        assigned_master, 
-        assigned_bay,
-        promised_at, 
-        status,
-        discount_type,
-        discount_value,
-        discount_reason,
-        final_total
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+        order_number, customer_id, vehicle_id, vehicle_info, complaint, notes,
+        priority, assigned_master, assigned_bay, promised_at, status,
+        discount_type, discount_value, discount_reason,
+        final_total, total_cost, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW(), NOW())
       RETURNING id, order_number, created_at
     `, [
-      orderNumber, 
-      customer_id || null, 
-      vehicle_id || null,
-      vehicle_info ? JSON.stringify(vehicle_info) : null,  // 🔥 Сохраняем JSONB!
-      complaint || '', 
-      notes || '', 
-      priority || 'normal',
-      assigned_master || null, 
-      assigned_bay || null,
-      promised_at || null, 
-      status || 'draft',
-      discount_type || 'none',
-      discount_value || 0,
-      discount_reason || '',
-      totals.final_total || totals.total || 0
+      orderNumber, customer_id || null, vehicle_id || null,
+      vehicle_info && Object.keys(vehicle_info).length > 0 ? JSON.stringify(vehicle_info) : null,
+      complaint || '', notes || '', priority || 'normal',
+      assigned_master || null, assigned_bay || null, promised_at || null,
+      status || 'draft', discount_type || 'none', discount_value || 0, discount_reason || '',
+      totals.final_total || totals.total || 0, totals.total || 0
     ]);
     
-    // ... остальной код (сохранение work_items, parts_items)
+    const workOrderId = orderResult.rows[0].id;
+    console.log('✅ Created work_order:', workOrderId);
+    
+    // 🔧 Сохранение работ (БЕЗ total_price — вычисляемая колонка!)
+    if (workItems.length > 0) {
+      console.log('🔧 Saving work_items:', workItems.length);
+      
+      for (const item of workItems) {
+        const serviceId = await resolveServiceId(item.service_id);
+        
+        await client.query(`
+          INSERT INTO work_order_items (
+            work_order_id, service_id, name, category, quantity, unit,
+            unit_price, labor_hours, status, notes
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        `, [
+          workOrderId, serviceId, item.name || '', item.category || '',
+          parseFloat(item.quantity) || 1, item.unit || 'усл',
+          parseFloat(item.unit_price) || 0, parseFloat(item.labor_hours) || 0,
+          item.status || 'pending', item.notes || ''
+        ]);
+      }
+      console.log('✅ Saved work_items');
+    }
+    
+    // 🔧 Сохранение запчастей (БЕЗ total_price!)
+    if (partsItems.length > 0) {
+      console.log('🔧 Saving parts_items:', partsItems.length);
+      
+      for (const item of partsItems) {
+        await client.query(`
+          INSERT INTO work_order_items (
+            work_order_id, part_id, name, category, quantity, unit,
+            unit_price, part_number, manufacturer, status
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        `, [
+          workOrderId, item.part_id || null, item.name || '', item.category || '',
+          parseInt(item.quantity) || 1, item.unit || 'шт',
+          parseFloat(item.unit_price) || 0,
+          item.part_number || item.article || '', item.manufacturer || '',
+          item.status || 'pending'
+        ]);
+      }
+      console.log('✅ Saved parts_items');
+    }
+    
+    await client.query('COMMIT');
     
     res.status(201).json({
       success: true,
       message: 'Заказ-наряд успешно создан',
-      work_order: result.rows[0]
+      work_order: orderResult.rows[0]
     });
     
   } catch (error) {
-    console.error('Error creating work order:', error);
+    await client.query('ROLLBACK');
+    console.error('❌ Error creating work order:', error);
     res.status(500).json({ error: error.message });
+  } finally {
+    client.release();
   }
 });
 
-// PUT /api/crm/work-orders/:id/status — Обновление статуса
 router.put('/work-orders/:id/status', async (req, res) => {
   try {
     const { id } = req.params;
@@ -628,7 +728,6 @@ router.put('/work-orders/:id/status', async (req, res) => {
   }
 });
 
-// POST /api/crm/work-orders/:id/items — Добавление элемента
 router.post('/work-orders/:id/items', async (req, res) => {
   try {
     const { id } = req.params;
@@ -657,7 +756,6 @@ router.post('/work-orders/:id/items', async (req, res) => {
   }
 });
 
-// DELETE /api/crm/work-orders/:id/items/:item_id — Удаление элемента
 router.delete('/work-orders/:id/items/:item_id', async (req, res) => {
   try {
     const { id, item_id } = req.params;
@@ -683,7 +781,6 @@ router.delete('/work-orders/:id/items/:item_id', async (req, res) => {
   }
 });
 
-// POST /api/crm/work-orders/:id/clone — Клонирование заказ-наряда
 router.post('/work-orders/:id/clone', async (req, res) => {
   try {
     const { id } = req.params;
@@ -691,29 +788,23 @@ router.post('/work-orders/:id/clone', async (req, res) => {
     
     await pool.query('BEGIN');
     try {
-      // Получаем исходный заказ-наряд
       const original = await pool.query(`SELECT * FROM work_orders WHERE id = $1`, [id]);
       if (original.rows.length === 0) throw new Error('Заказ-наряд не найден');
       
       const orig = original.rows[0];
       const newOrderNumber = `WO-${Date.now().toString().slice(-6)}`;
       
-      // Создаём новый заказ-наряд
       const newWo = await pool.query(`
         INSERT INTO work_orders (order_number, customer_id, vehicle_id, complaint, notes,
                                  promised_at, assigned_master, assigned_bay, status, vehicle_info)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'draft', $9)
         RETURNING id, order_number
       `, [
-        newOrderNumber,
-        new_customer_id || orig.customer_id,
-        new_vehicle_id || orig.vehicle_id,
-        orig.complaint,
-        notes_prefix ? `${notes_prefix}: ${orig.notes || ''}` : orig.notes,
+        newOrderNumber, new_customer_id || orig.customer_id, new_vehicle_id || orig.vehicle_id,
+        orig.complaint, notes_prefix ? `${notes_prefix}: ${orig.notes || ''}` : orig.notes,
         null, orig.assigned_master, orig.assigned_bay, orig.vehicle_info
       ]);
       
-      // Копируем элементы
       await pool.query(`
         INSERT INTO work_order_items (work_order_id, item_type, service_id, part_id,
                                       quantity, labor_hours, unit_price, total_price, comment)
@@ -735,7 +826,6 @@ router.post('/work-orders/:id/clone', async (req, res) => {
 
 // ==================== ШАБЛОНЫ УСЛУГ ====================
 
-// GET /api/crm/service-templates — Список шаблонов
 router.get('/service-templates', async (req, res) => {
   try {
     const { category, search } = req.query;
@@ -775,7 +865,6 @@ router.get('/service-templates', async (req, res) => {
   }
 });
 
-// POST /api/crm/service-templates — Создание шаблона
 router.post('/service-templates', async (req, res) => {
   try {
     const { name, description, category, service_ids, default_labor_hours } = req.body;
@@ -806,13 +895,11 @@ router.post('/service-templates', async (req, res) => {
   }
 });
 
-// POST /api/crm/work-orders/from-template/:template_id — Создание заказ-наряда из шаблона
 router.post('/work-orders/from-template/:template_id', async (req, res) => {
   try {
     const { template_id } = req.params;
     const { customer_id, vehicle_id, complaint, notes, promised_at } = req.body;
     
-    // Получаем шаблон и его услуги
     const [template, items] = await Promise.all([
       pool.query(`SELECT * FROM service_templates WHERE id = $1`, [template_id]),
       pool.query(`
@@ -858,7 +945,6 @@ router.post('/work-orders/from-template/:template_id', async (req, res) => {
 
 // ==================== ОТЧЁТЫ ====================
 
-// GET /api/crm/reports/revenue — Отчёт по выручке
 router.get('/reports/revenue', async (req, res) => {
   try {
     const { date_from, date_to, interval = 'day', group_by } = req.query;
@@ -896,7 +982,6 @@ router.get('/reports/revenue', async (req, res) => {
   }
 });
 
-// GET /api/crm/reports/masters — Отчёт по мастерам
 router.get('/reports/masters', async (req, res) => {
   try {
     const { date_from, date_to } = req.query;
@@ -928,7 +1013,6 @@ router.get('/reports/masters', async (req, res) => {
   }
 });
 
-// GET /api/crm/reports/services-popularity — Популярные услуги
 router.get('/reports/services-popularity', async (req, res) => {
   try {
     const { date_from, date_to, limit = 20 } = req.query;
@@ -955,24 +1039,23 @@ router.get('/reports/services-popularity', async (req, res) => {
   }
 });
 
-// GET /api/crm/reports/customers-ltv — LTV клиентов
 router.get('/reports/customers-ltv', async (req, res) => {
   try {
     const { date_from, date_to } = req.query;
     
     const result = await pool.query(`
-      SELECT c.id, c.name, c.phone_primary, c.loyalty_level,
+      SELECT cp.id, COALESCE(cp.company_name, cp.fio) as name, cp.phone,
              COUNT(DISTINCT wo.id) as total_orders,
              SUM(wo.final_total) as total_spent,
              AVG(wo.final_total) as avg_order_value,
              MIN(wo.created_at) as first_order,
              MAX(wo.created_at) as last_order,
              EXTRACT(DAY FROM (MAX(wo.created_at) - MIN(wo.created_at))) as customer_lifetime_days
-      FROM crm_customers c
-      JOIN work_orders wo ON c.id = wo.customer_id AND wo.status = 'completed'
+      FROM counterparties cp
+      JOIN work_orders wo ON cp.id = wo.customer_id AND wo.status = 'completed'
       WHERE ($1::date IS NULL OR wo.created_at >= $1::date)
         AND ($2::date IS NULL OR wo.created_at <= $2::date)
-      GROUP BY c.id, c.name, c.phone_primary, c.loyalty_level
+      GROUP BY cp.id, cp.company_name, cp.fio, cp.phone
       HAVING COUNT(DISTINCT wo.id) >= 2
       ORDER BY total_spent DESC
       LIMIT 50
@@ -985,14 +1068,12 @@ router.get('/reports/customers-ltv', async (req, res) => {
   }
 });
 
-// ============================================================================
-// PUT /api/crm/work-orders/:id — Обновление заказ-наряда
-// ============================================================================
-// ============================================================================
-// PUT /api/crm/work-orders/:id — Обновление заказ-наряда (ИСПРАВЛЕННЫЙ)
-// ============================================================================
 router.put('/work-orders/:id', async (req, res) => {
+  const client = await pool.connect();
+  
   try {
+    await client.query('BEGIN');
+    
     const { id } = req.params;
     const { 
       customer_id, vehicle_id, vehicle_info, complaint, notes,
@@ -1001,148 +1082,116 @@ router.put('/work-orders/:id', async (req, res) => {
       work_items, parts_items, totals
     } = req.body;
     
-    console.log('🔍 PUT /work-orders/:id payload:', { id, work_items_count: work_items?.length, parts_items_count: parts_items?.length });
+    console.log('🔍 PUT /work-orders/:id payload:', { 
+      id, 
+      work_items_count: work_items?.length, 
+      parts_items_count: parts_items?.length 
+    });
     
-    // 🔍 Проверка: существует ли заказ-наряд
-    const check = await pool.query('SELECT id FROM work_orders WHERE id = $1', [id]);
+    const check = await client.query('SELECT id, order_number FROM work_orders WHERE id = $1', [id]);
     if (check.rows.length === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json({ error: 'Заказ-наряд не найден' });
     }
     
-    // 🔧 Обновление основного заказ-наряда
-    await pool.query(`
+    await client.query(`
       UPDATE work_orders SET
-        customer_id = $1,
-        vehicle_id = $2,
-        vehicle_info = $3,
-        complaint = $4,
-        notes = $5,
-        assigned_master = $6,
-        assigned_bay = $7,
-        promised_at = $8,
-        status = $9,
-        discount_type = $10,
-        discount_value = $11,
-        discount_reason = $12,
-        final_total = $13,
-        total_cost = $14,
-        updated_at = NOW()
+        customer_id = $1, vehicle_id = $2, vehicle_info = $3, complaint = $4, notes = $5,
+        assigned_master = $6, assigned_bay = $7, promised_at = $8, status = $9,
+        discount_type = $10, discount_value = $11, discount_reason = $12,
+        final_total = $13, total_cost = $14, updated_at = NOW()
       WHERE id = $15
     `, [
-      customer_id || null,
-      vehicle_id || null,
-      vehicle_info ? JSON.stringify(vehicle_info) : null,
-      complaint || '',
-      notes || '',
-      assigned_master || null,
-      assigned_bay || null,
-      promised_at || null,
-      status || 'draft',
-      discount_type || 'none',
-      discount_value || 0,
-      discount_reason || '',
-      totals?.final_total || totals?.total || 0,
-      totals?.total || 0,
-      id
+      customer_id || null, vehicle_id || null,
+      vehicle_info && Object.keys(vehicle_info).length > 0 ? JSON.stringify(vehicle_info) : null,
+      complaint || '', notes || '', assigned_master || null, assigned_bay || null,
+      promised_at || null, status || 'draft', discount_type || 'none',
+      discount_value || 0, discount_reason || '',
+      totals?.final_total || totals?.total || 0, totals?.total || 0, id
     ]);
     
-    // 🔧 Обновление работ: удаляем старые, добавляем новые
+    console.log('✅ Updated work_order base data');
+    
+    // 🔧 Обновление работ
     if (Array.isArray(work_items)) {
       console.log('🔧 Updating work_items:', work_items.length);
       
-      // Удаляем старые работы (только те, что связаны с services)
-      await pool.query(
+      await client.query(
         'DELETE FROM work_order_items WHERE work_order_id = $1 AND service_id IS NOT NULL', 
         [id]
       );
       
-      // Добавляем новые
       for (const item of work_items) {
-        await pool.query(`
+        const serviceId = await resolveServiceId(item.service_id);
+        
+        await client.query(`
           INSERT INTO work_order_items (
-            work_order_id, service_id, name, category, quantity, unit, 
-            unit_price, total_price, labor_hours, status, notes
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            work_order_id, service_id, name, category, quantity, unit,
+            unit_price, labor_hours, status, notes
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         `, [
-          id, 
-          item.service_id || null, 
-          item.name || '', 
-          item.category || '',
-          item.quantity || 1, 
-          item.unit || 'усл', 
-          item.unit_price || 0,
-          item.total_price || 0, 
-          item.labor_hours || 0, 
-          item.status || 'pending', 
-          item.notes || ''
+          id, serviceId, item.name || '', item.category || '',
+          parseFloat(item.quantity) || 1, item.unit || 'усл',
+          parseFloat(item.unit_price) || 0, parseFloat(item.labor_hours) || 0,
+          item.status || 'pending', item.notes || ''
         ]);
       }
+      console.log('✅ Updated work_items');
     }
     
-    // 🔧 Обновление запчастей: удаляем старые, добавляем новые
+    // 🔧 Обновление запчастей
     if (Array.isArray(parts_items)) {
       console.log('🔧 Updating parts_items:', parts_items.length);
       
-      // Удаляем старые запчасти (только те, что имеют part_id или part_number)
-      await pool.query(
-        'DELETE FROM work_order_items WHERE work_order_id = $1 AND (part_id IS NOT NULL OR name IS NOT NULL)', 
+      await client.query(
+        'DELETE FROM work_order_items WHERE work_order_id = $1 AND (part_id IS NOT NULL OR part_number IS NOT NULL)', 
         [id]
       );
       
-      // Добавляем новые
       for (const item of parts_items) {
-        await pool.query(`
+        await client.query(`
           INSERT INTO work_order_items (
             work_order_id, part_id, name, category, quantity, unit,
-            unit_price, total_price, part_number, manufacturer, status
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            unit_price, part_number, manufacturer, status
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         `, [
-          id, 
-          item.part_id || null, 
-          item.name || '', 
-          item.category || '',
-          item.quantity || 1, 
-          item.unit || 'шт', 
-          item.unit_price || 0,
-          item.total_price || 0, 
-          item.part_number || item.article || '',
-          item.manufacturer || '', 
+          id, item.part_id || null, item.name || '', item.category || '',
+          parseInt(item.quantity) || 1, item.unit || 'шт',
+          parseFloat(item.unit_price) || 0,
+          item.part_number || item.article || '', item.manufacturer || '',
           item.status || 'pending'
         ]);
       }
+      console.log('✅ Updated parts_items');
     }
     
+    await client.query('COMMIT');
     console.log('✅ Work order updated successfully');
     res.json({ success: true, message: 'Заказ-наряд обновлён', work_order: { id } });
     
   } catch (error) {
+    await client.query('ROLLBACK');
     console.error('❌ Error updating work order:', error);
     res.status(500).json({ error: error.message });
+  } finally {
+    client.release();
   }
 });
 
-// ============================================================================
-// DELETE /api/crm/work-orders/:id — Удаление заказ-наряда
-// ============================================================================
 router.delete('/work-orders/:id', async (req, res) => {
   try {
     const { id } = req.params;
     
-    // 🔍 Проверка: существует ли заказ-наряд
     const check = await pool.query('SELECT id, order_number FROM work_orders WHERE id = $1', [id]);
     if (check.rows.length === 0) {
       return res.status(404).json({ error: 'Заказ-наряд не найден' });
     }
     
-    // 🔧 Удаление связанных элементов (CASCADE можно настроить в БД)
     await pool.query('DELETE FROM work_order_items WHERE work_order_id = $1', [id]);
     await pool.query('DELETE FROM work_order_status_history WHERE work_order_id = $1', [id]);
-    
-    // 🔧 Удаление самого заказ-наряда
     await pool.query('DELETE FROM work_orders WHERE id = $1', [id]);
     
     console.log(`🗑️ Deleted work order #${id} (${check.rows[0].order_number})`);
-    
     res.json({ success: true, message: 'Заказ-наряд удалён', deleted_id: parseInt(id) });
     
   } catch (error) {
@@ -1151,69 +1200,8 @@ router.delete('/work-orders/:id', async (req, res) => {
   }
 });
 
-// ============================================================================
-// GET /api/parts — Получение запчастей со склада (таблица items)
-// ============================================================================
-router.get('/parts', async (req, res) => {
-  try {
-    const { search, category, limit = 200 } = req.query;
-    
-    let query = `
-      SELECT 
-        i.id,
-        i.name,
-        i.part_number,
-        i.description,
-        i.quantity,
-        i.status,
-        c.name as category_name,
-        m.name as manufacturer_name,
-        l.name as location_name
-      FROM items i
-      LEFT JOIN categories c ON i.category_id = c.id
-      LEFT JOIN manufacturers m ON i.manufacturer_id = m.id
-      LEFT JOIN locations l ON i.location_id = l.id
-      WHERE i.status != 'deleted'
-    `;
-    
-    const params = [];
-    let paramIndex = 1;
-    
-    if (search) {
-      query += ` AND (i.name ILIKE $${paramIndex} OR i.part_number ILIKE $${paramIndex} OR i.description ILIKE $${paramIndex})`;
-      params.push(`%${search}%`);
-      paramIndex++;
-    }
-    
-    if (category) {
-      query += ` AND i.category_id = $${paramIndex}`;
-      params.push(category);
-      paramIndex++;
-    }
-    
-    query += ` ORDER BY i.name LIMIT $${paramIndex}`;
-    params.push(parseInt(limit));
-    
-    console.log('🔍 Fetching parts with query:', query, params);
-    
-    const result = await pool.query(query, params);
-    
-    console.log('✅ Found parts:', result.rows.length);
-    
-    res.json({
-      parts: result.rows,
-      total: result.rows.length
-    });
-    
-  } catch (error) {
-    console.error('❌ Error fetching parts:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
 // ==================== ДАШБОРД ====================
 
-// GET /api/crm/dashboard — Сводка для дашборда
 router.get('/dashboard', async (req, res) => {
   try {
     const [stats, pendingOrders, revenue, topServices] = await Promise.all([
@@ -1222,23 +1210,23 @@ router.get('/dashboard', async (req, res) => {
           (SELECT COUNT(*) FROM work_orders WHERE status = 'in_progress') as active_orders,
           (SELECT COUNT(*) FROM work_orders WHERE status = 'waiting_parts') as waiting_parts,
           (SELECT COUNT(*) FROM work_orders WHERE status = 'ready') as ready_for_pickup,
-          (SELECT COUNT(*) FROM crm_customers WHERE last_visit_date >= CURRENT_DATE - INTERVAL '30 days') as active_customers_30d,
+          (SELECT COUNT(*) FROM counterparties WHERE created_at >= CURRENT_DATE - INTERVAL '30 days') as active_customers_30d,
           (SELECT SUM(final_total) FROM work_orders WHERE completed_at >= CURRENT_DATE) as today_revenue,
           (SELECT COUNT(*) FROM work_orders WHERE promised_at < NOW() AND status NOT IN ('completed','cancelled','archived')) as overdue_orders
       `),
-        pool.query(`
+      pool.query(`
         SELECT wo.id, wo.order_number, wo.promised_at, wo.status,
-                c.phone_primary, c.loyalty_level,
-                (wo.vehicle_info::jsonb)->>'brand' as brand,
-                (wo.vehicle_info::jsonb)->>'model' as model,
-                u.username as master_name,
-                EXTRACT(EPOCH FROM (NOW() - wo.promised_at))/3600 as hours_overdue
+               cp.phone,
+               (wo.vehicle_info::jsonb)->>'brand' as brand,
+               (wo.vehicle_info::jsonb)->>'model' as model,
+               u.username as master_name,
+               EXTRACT(EPOCH FROM (NOW() - wo.promised_at))/3600 as hours_overdue
         FROM work_orders wo
-        JOIN crm_customers c ON wo.customer_id = c.id
+        JOIN counterparties cp ON wo.customer_id = cp.id
         LEFT JOIN users u ON wo.assigned_master::text = u.id::text
         WHERE wo.promised_at < NOW() AND wo.status NOT IN ('completed', 'cancelled', 'archived')
         ORDER BY wo.promised_at ASC LIMIT 10
-        `),
+      `),
       pool.query(`
         SELECT DATE(wo.completed_at) as date, SUM(wo.final_total) as revenue
         FROM work_orders wo
@@ -1268,7 +1256,6 @@ router.get('/dashboard', async (req, res) => {
   }
 });
 
-// GET /api/crm/dashboard/quick-stats — Быстрые метрики для хедера
 router.get('/dashboard/quick-stats', async (req, res) => {
   try {
     const result = await pool.query(`
@@ -1276,7 +1263,7 @@ router.get('/dashboard/quick-stats', async (req, res) => {
         (SELECT COUNT(*) FROM work_orders WHERE status IN ('in_progress','waiting_parts')) as active_count,
         (SELECT COUNT(*) FROM work_orders WHERE promised_at < NOW() AND status = 'in_progress') as overdue_count,
         (SELECT SUM(final_total) FROM work_orders WHERE DATE(completed_at) = CURRENT_DATE) as today_revenue,
-        (SELECT COUNT(*) FROM crm_customers WHERE DATE(created_at) = CURRENT_DATE) as new_customers_today
+        (SELECT COUNT(*) FROM counterparties WHERE DATE(created_at) = CURRENT_DATE) as new_customers_today
     `);
     res.json(result.rows[0] || {});
   } catch (error) {

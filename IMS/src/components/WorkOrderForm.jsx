@@ -4,10 +4,10 @@ import { useNavigate, useParams } from 'react-router-dom';
 
 function WorkOrderForm({ token }) {
   const navigate = useNavigate();
-  const { id } = useParams(); // 🔥 Получаем id из URL (например, /crm/work-orders/3/edit)
+  const { id } = useParams();
   
   const [order, setOrder] = useState(null);
-  const [customers, setCustomers] = useState([]);
+  const [counterparties, setCounterparties] = useState([]);
   const [services, setServices] = useState([]);
   const [masters, setMasters] = useState([]);
   const [warehouseParts, setWarehouseParts] = useState([]);
@@ -33,7 +33,6 @@ function WorkOrderForm({ token }) {
   const [workItems, setWorkItems] = useState([]);
   const [partsItems, setPartsItems] = useState([]);
 
-  // 🔧 Определяем режим: создание или редактирование
   const isEditMode = !!id;
 
   // 🔧 Хелпер: извлекает массив из ответа API
@@ -42,7 +41,7 @@ function WorkOrderForm({ token }) {
     for (const key of possibleKeys) {
       if (Array.isArray(data?.[key])) return data[key];
     }
-    for (const key of ['customers', 'services', 'users', 'data', 'rows', 'items', 'results', 'parts']) {
+    for (const key of ['counterparties', 'customers', 'services', 'users', 'data', 'rows', 'items', 'results', 'parts']) {
       if (Array.isArray(data?.[key])) return data[key];
     }
     return [];
@@ -52,28 +51,41 @@ function WorkOrderForm({ token }) {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [customersRes, servicesRes, mastersRes] = await Promise.all([
-          fetch('/api/crm/customers?limit=200', { headers: { 'Authorization': `Bearer ${token}` } }),
+        const [counterpartiesRes, servicesRes, mastersRes] = await Promise.all([
+          fetch('/api/crm/counterparties?limit=200', { headers: { 'Authorization': `Bearer ${token}` } }),
           fetch('/api/services?active=true&limit=500', { headers: { 'Authorization': `Bearer ${token}` } }),
           fetch('/api/users?role=master', { headers: { 'Authorization': `Bearer ${token}` } })
         ]);
 
-        if (customersRes.ok) setCustomers(extractArray(await customersRes.json(), ['customers']));
+        if (counterpartiesRes.ok) setCounterparties(extractArray(await counterpartiesRes.json(), ['counterparties', 'customers']));
         if (servicesRes.ok) setServices(extractArray(await servicesRes.json(), ['services']));
         if (mastersRes.ok) setMasters(extractArray(await mastersRes.json(), ['users', 'masters']));
 
-        // 🔥 Загружаем данные заказ-наряда ТОЛЬКО если есть id (режим редактирования)
+        // 🔥 Загружаем данные заказ-наряда при редактировании
+        // В useEffect при загрузке заказ-наряда:
         if (isEditMode && id) {
           console.log('🔍 Loading order for edit:', id);
           const orderRes = await fetch(`/api/crm/work-orders/${id}`, {
             headers: { 'Authorization': `Bearer ${token}` }
           });
+          
+          // 🔧 СТАЛО (правильно):
           if (orderRes.ok) {
             const data = await orderRes.json();
-            const orderData = data.order || data.work_order || data;
+            const orderData = data.work_order || data.order || data;
+            
+            // 🔥 Читаем work_items и parts_items отдельно (так возвращает бэкенд)
+            const worksData = Array.isArray(data.work_items) ? data.work_items : [];
+            const partsData = Array.isArray(data.parts_items) ? data.parts_items : [];
+            
+            console.log('📦 Loaded:', { 
+              works: worksData.length, 
+              parts: partsData.length,
+              raw: { work_items: data.work_items, parts_items: data.parts_items }
+            });
+            
             setOrder(orderData);
             
-            // 🔥 Заполняем форму данными из БД
             setFormData({
               customer_id: orderData.customer_id || '',
               vehicle_info: orderData.vehicle_info || {},
@@ -88,53 +100,50 @@ function WorkOrderForm({ token }) {
               discount_reason: ''
             });
             
-            if (orderData.work_items) setWorkItems(orderData.work_items);
-            if (orderData.parts_items) setPartsItems(orderData.parts_items);
+            // 🔥 Устанавливаем работы и запчасти
+            setWorkItems(worksData);
+            setPartsItems(partsData);
             
             console.log('✅ Order loaded:', orderData);
-          } else {
-            console.error('❌ Failed to load order');
-            alert('⚠️ Не удалось загрузить заказ-наряд');
-            navigate('/crm/work-orders');
           }
         }
       } catch (err) {
         console.error('Error loading data:', err);
-        setCustomers([]); setServices([]); setMasters([]);
+        setCounterparties([]); setServices([]); setMasters([]);
       } finally {
         setLoading(false);
       }
     };
     loadData();
-  }, [token, id, isEditMode]); // 🔥 Зависимость от id
+  }, [token, id, isEditMode]);
 
-  // 🔧 Загрузка запчастей со склада при открытии модалки
+  // 🔧 Загрузка запчастей со склада (используем /api/items из items.js)
+// В useEffect для загрузки запчастей:
   useEffect(() => {
     if (showPartsSelector) {
-      console.log('🔍 Opening parts selector, fetching...');
+      console.log('🔍 Opening parts selector, fetching from /api/items...');
       
       const fetchWarehouseParts = async () => {
         try {
-          const response = await fetch('/api/parts?limit=200', {
+          // 🔥 Используем маршрут из items.js (возвращает массив [...])
+          const response = await fetch('/api/items?limit=200', {
             headers: { 'Authorization': `Bearer ${token}` }
           });
           
-          console.log('📦 Parts API response status:', response.status);
+          console.log('📦 Items API status:', response.status);
           
           if (response.ok) {
             const data = await response.json();
-            console.log('📦 Parts API data:', { 
-              total: data.total, 
-              parts_count: data.parts?.length,
-              first_part: data.parts?.[0]
-            });
-            setWarehouseParts(data.parts || []);
+            // 🔥 Ответ из items.js — это массив, не объект
+            const partsArray = Array.isArray(data) ? data : (data.items || data.parts || []);
+            console.log('📦 Loaded parts:', partsArray.length);
+            setWarehouseParts(partsArray);
           } else {
             const err = await response.json();
-            console.error('❌ Parts API error:', err);
+            console.error('❌ Items API error:', err);
           }
         } catch (err) {
-          console.error('❌ Error fetching warehouse parts:', err);
+          console.error('❌ Error fetching items:', err);
         }
       };
       fetchWarehouseParts();
@@ -142,7 +151,7 @@ function WorkOrderForm({ token }) {
   }, [showPartsSelector, token]);
 
   // 🔧 БЕЗОПАСНЫЕ МАССИВЫ
-  const safeCustomers = Array.isArray(customers) ? customers : [];
+  const safeCounterparties = Array.isArray(counterparties) ? counterparties : [];
   const safeMasters = Array.isArray(masters) ? masters : [];
   const safeServices = Array.isArray(services) ? services : [];
   const safeWorkItems = Array.isArray(workItems) ? workItems : [];
@@ -157,15 +166,21 @@ function WorkOrderForm({ token }) {
     return { labor: laborTotal, parts: partsTotal, total: laborTotal + partsTotal };
   }, [safeWorkItems, safePartsItems]);
 
-  // 🔧 Расчёт скидки
+  // 🔧 Расчёт скидки (используем type вместо loyalty_level)
   const pricing = useMemo(() => {
     const subtotal = totals.total;
     let discountAmount = 0;
     
     if (formData.discount_type === 'loyalty' && formData.customer_id) {
-      const customer = safeCustomers.find(c => c.id == formData.customer_id);
-      const loyaltyRates = { bronze: 0, silver: 5, gold: 10, platinum: 15 };
-      const rate = customer?.loyalty_level ? loyaltyRates[customer.loyalty_level] || 0 : 0;
+      const customer = safeCounterparties.find(c => c.id == formData.customer_id);
+      // 🔥 Альтернатива: скидка по типу контрагента
+      const loyaltyRates = { 
+        individual: 0,
+        legal: 5,
+        vip: 10,
+        partner: 15
+      };
+      const rate = customer?.type ? loyaltyRates[customer.type] || 0 : 0;
       discountAmount = subtotal * (rate / 100);
     } else if (formData.discount_type === 'percent') {
       const percent = parseFloat(formData.discount_value) || 0;
@@ -183,7 +198,7 @@ function WorkOrderForm({ token }) {
       final: finalTotal,
       discountPercent: subtotal > 0 ? Math.round((discountAmount / subtotal) * 100) : 0
     };
-  }, [totals.total, formData.discount_type, formData.discount_value, formData.customer_id, safeCustomers]);
+  }, [totals.total, formData.discount_type, formData.discount_value, formData.customer_id, safeCounterparties]);
 
   // Группировка услуг
   const servicesByCategory = useMemo(() => {
@@ -234,7 +249,7 @@ function WorkOrderForm({ token }) {
   const addPartItem = (template = {}) => {
     setPartsItems(prev => [...prev, {
       id: Date.now() + Math.random(),
-      part_id: template.part_id || null,
+      item_id: template.item_id || template.part_id || null,
       name: template.name || '',
       article: template.article || template.part_number || '',
       quantity: template.quantity || 1,
@@ -273,9 +288,7 @@ function WorkOrderForm({ token }) {
     try {
       console.log('🔍 Sending payload:', {
         work_items_count: workItems.length,
-        parts_items_count: partsItems.length,
-        first_work: workItems[0],
-        first_part: partsItems[0]
+        parts_items_count: partsItems.length
       });
 
       const payload = { 
@@ -293,7 +306,6 @@ function WorkOrderForm({ token }) {
         discount_value: formData.discount_value || 0,
         discount_reason: formData.discount_reason || '',
         
-        // 🔥 Явно преобразуем в массивы (защита от undefined)
         work_items: Array.isArray(workItems) ? workItems : [],
         parts_items: Array.isArray(partsItems) ? partsItems : [],
         
@@ -305,7 +317,6 @@ function WorkOrderForm({ token }) {
         }
       };
       
-      // 🔥 Используем id из useParams() для определения режима
       const url = isEditMode ? `/api/crm/work-orders/${id}` : '/api/crm/work-orders';
       const method = isEditMode ? 'PUT' : 'POST';
       
@@ -331,7 +342,7 @@ function WorkOrderForm({ token }) {
     }
   };
 
-  // 🔧 Встроенная модалка выбора услуг
+  // 🔧 Модалка выбора услуг
   const ServiceSelectorInline = ({ services, categories, onClose, onSelect }) => {
     const [search, setSearch] = useState('');
     const [selectedCat, setSelectedCat] = useState('all');
@@ -433,7 +444,7 @@ function WorkOrderForm({ token }) {
     );
   };
 
-  // 🔧 Встроенная модалка выбора запчастей со склада
+  // 🔧 Модалка выбора запчастей из склада
   const PartsSelectorInline = ({ parts, onClose, onSelect }) => {
     const [search, setSearch] = useState('');
     const [selected, setSelected] = useState([]);
@@ -445,7 +456,7 @@ function WorkOrderForm({ token }) {
         p.name?.toLowerCase().includes(q) || 
         p.part_number?.toLowerCase().includes(q) ||
         p.description?.toLowerCase().includes(q) ||
-        p.manufacturer_name?.toLowerCase().includes(q)
+        p.qr_code?.toLowerCase().includes(q)
       ).slice(0, 100);
     }, [parts, search]);
 
@@ -482,7 +493,7 @@ function WorkOrderForm({ token }) {
           <div style={{ padding: '12px 20px', borderBottom: '1px solid #eee' }}>
             <input 
               type="text" 
-              placeholder="🔍 Поиск по названию, артикулу или описанию..." 
+              placeholder="🔍 Поиск по названию, артикулу, описанию или QR..." 
               value={search} 
               onChange={e => setSearch(e.target.value)}
               style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '14px' }}
@@ -522,20 +533,14 @@ function WorkOrderForm({ token }) {
                           )}
                         </div>
                         <div style={{ fontSize: '13px', color: '#666', marginTop: '4px' }}>
-                          {part.manufacturer_name && <span>🏭 {part.manufacturer_name} • </span>}
-                          {part.category_name && <span>📁 {part.category_name} • </span>}
+                          {part.description && <span>📝 {part.description.substring(0, 50)}{part.description.length > 50 ? '...' : ''} • </span>}
                           {part.quantity !== null && (
                             <span style={{ marginLeft: '8px', color: part.quantity > 0 ? '#27ae60' : '#e74c3c' }}>
                               📦 Остаток: {part.quantity} шт
                             </span>
                           )}
-                          {part.location_name && <span> • 📍 {part.location_name}</span>}
+                          {part.qr_code && <span> • 🏷️ QR: {part.qr_code}</span>}
                         </div>
-                        {part.description && (
-                          <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>
-                            {part.description}
-                          </div>
-                        )}
                       </div>
                       {isSelected && (
                         <span style={{ color: '#e67e22', fontWeight: 'bold', fontSize: '18px' }}>✓</span>
@@ -599,16 +604,20 @@ function WorkOrderForm({ token }) {
 
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
         
-        {/* 👤 Клиент */}
-        <Card title="👤 Клиент">
+        {/* 👤 Клиент (из контрагентов) */}
+        <Card title="👤 Клиент / Контрагент">
           <select value={formData.customer_id} onChange={(e) => setFormData({ ...formData, customer_id: e.target.value })} style={inputStyle} required>
-            <option value="">Выберите клиента...</option>
-            {safeCustomers.map(c => (
-              <option key={c.id} value={c.id}>
-                {c.counterparty_name || c.name || 'Частное лицо'} • {c.phone || c.phone_primary || 'нет телефона'}
-                {c.loyalty_level && c.loyalty_level !== 'bronze' && ` • ${getLoyaltyEmoji(c.loyalty_level)} ${c.loyalty_level}`}
-              </option>
-            ))}
+            <option value="">Выберите контрагента...</option>
+            {safeCounterparties.map(c => {
+              const displayName = c.company_name || c.fio || 'Без имени';
+              const phone = c.phone || '';
+              const inn = c.inn ? `ИНН: ${c.inn}` : '';
+              return (
+                <option key={c.id} value={c.id}>
+                  {displayName} {phone && `• ${phone}`} {inn && `• ${inn}`}
+                </option>
+              );
+            })}
           </select>
         </Card>
 
@@ -668,7 +677,7 @@ function WorkOrderForm({ token }) {
           </div>
         </Card>
 
-        {/* 🔧 Работы */}
+        {/* 🔧 РАБОТЫ — отдельная секция */}
         <Card title="🔧 Работы">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', flexWrap: 'wrap', gap: '10px' }}>
             <strong>Добавленные работы</strong>
@@ -710,12 +719,12 @@ function WorkOrderForm({ token }) {
           )}
         </Card>
 
-        {/* 🔩 Запчасти */}
+        {/* 🔩 ЗАПЧАСТИ — отдельная секция */}
         <Card title="🔩 Запчасти">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
             <strong>Добавленные запчасти</strong>
             <div style={{ display: 'flex', gap: '10px' }}>
-              <button type="button" onClick={() => setShowPartsSelector(true)} style={{ ...btnStyle, backgroundColor: '#e67e22' }}>📦 Из справочника</button>
+              <button type="button" onClick={() => setShowPartsSelector(true)} style={{ ...btnStyle, backgroundColor: '#e67e22' }}>📦 Из склада</button>
               <button type="button" onClick={() => addPartItem()} style={{ ...btnStyle, backgroundColor: '#3498db' }}>➕ Вручную</button>
             </div>
           </div>
@@ -791,14 +800,14 @@ function WorkOrderForm({ token }) {
                 <label style={{ ...labelStyle, marginBottom: '4px' }}>Автоскидка:</label>
                 <div style={{ fontSize: '16px', fontWeight: '600', color: '#27ae60' }}>
                   {(() => {
-                    const customer = safeCustomers.find(c => c.id == formData.customer_id);
-                    const rates = { bronze: 0, silver: 5, gold: 10, platinum: 15 };
-                    const level = customer?.loyalty_level || 'bronze';
-                    const rate = rates[level] || 0;
+                    const customer = safeCounterparties.find(c => c.id == formData.customer_id);
+                    const rates = { individual: 0, legal: 5, vip: 10, partner: 15 };
+                    const type = customer?.type || 'individual';
+                    const rate = rates[type] || 0;
                     const amount = totals.total * (rate / 100);
                     return (
                       <>
-                        {getLoyaltyEmoji(level)} {level.toUpperCase()}: -{rate}%<br/>
+                        {type.toUpperCase()}: -{rate}%<br/>
                         <span style={{ fontSize: '14px', color: '#666' }}>
                           -{amount.toLocaleString('ru-RU')} ₽
                         </span>
@@ -834,7 +843,7 @@ function WorkOrderForm({ token }) {
               Сумма работ и запчастей: <strong>{pricing.subtotal.toLocaleString('ru-RU')} ₽</strong><br/>
               Скидка ({formData.discount_type === 'percent' ? `${formData.discount_value}%` : 
                       formData.discount_type === 'fixed' ? 'фикс.' : 
-                      formData.discount_type === 'loyalty' ? 'по лояльности' : '-'}): 
+                      formData.discount_type === 'loyalty' ? 'по типу' : '-'}): 
               <strong style={{ color: '#e74c3c' }}> -{pricing.discount.toLocaleString('ru-RU')} ₽</strong><br/>
               <hr style={{ margin: '8px 0', border: 'none', borderTop: '1px dashed #27ae60' }}/>
               <strong>Итого к оплате: <span style={{ color: '#27ae60', fontSize: '18px' }}>
@@ -883,7 +892,7 @@ function WorkOrderForm({ token }) {
         </div>
       </form>
 
-      {/* 🔧 Встроенная модалка выбора услуг */}
+      {/* 🔧 Модалка выбора услуг */}
       {showServiceSelector && (
         <ServiceSelectorInline
           services={safeServices}
@@ -903,7 +912,7 @@ function WorkOrderForm({ token }) {
         />
       )}
 
-      {/* 🔧 Встроенная модалка выбора запчастей */}
+      {/* 🔧 Модалка выбора запчастей из склада */}
       {showPartsSelector && (
         <PartsSelectorInline
           parts={warehouseParts}
@@ -911,17 +920,16 @@ function WorkOrderForm({ token }) {
           onSelect={(selectedParts) => {
             selectedParts.forEach(part => {
               addPartItem({
+                item_id: part.id,
                 part_id: part.id,
                 name: part.name,
                 part_number: part.part_number,
                 article: part.part_number,
-                category: part.category_name,
-                manufacturer: part.manufacturer_name,
                 quantity: 1,
                 unit: 'шт',
                 unit_price: 0,
                 total_price: 0,
-                location_name: part.location_name
+                description: part.description
               });
             });
             setShowPartsSelector(false);
@@ -953,10 +961,5 @@ const inputStyle = { width: '100%', padding: '10px 12px', border: '1px solid #dd
 const btnStyle = { padding: '10px 18px', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: '500', transition: 'background 0.2s' };
 const thStyle = { padding: '12px 8px', textAlign: 'left', fontWeight: '600', color: '#555', fontSize: '13px' };
 const tdStyle = { padding: '10px 8px', verticalAlign: 'middle' };
-
-const getLoyaltyEmoji = (level) => {
-  const map = { bronze: '🥉', silver: '🥈', gold: '🥇', platinum: '💎' };
-  return map[level] || '•';
-};
 
 export default WorkOrderForm;

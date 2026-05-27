@@ -28,17 +28,23 @@ function WorkOrderDetail({ token }) {
         
         const data = await response.json();
         console.log('✅ API Response:', JSON.stringify(data, null, 2));
-        
+
         const orderData = data.work_order || data.order || data;
-        const itemsData = data.items || [];
-        
+
+        // 🔥 Читаем work_items и parts_items отдельно (так возвращает бэкенд)
+        const worksData = Array.isArray(data.work_items) ? data.work_items : [];
+        const partsData = Array.isArray(data.parts_items) ? data.parts_items : [];
+
+        // 🔥 Объединяем для отображения
+        const allItems = [...worksData, ...partsData];
+
         console.log('📦 Parsed order:', orderData);
-        console.log('📦 Parsed items:', itemsData);
-        console.log('🚗 vehicle_info type:', typeof orderData.vehicle_info);
-        console.log('🚗 vehicle_info value:', orderData.vehicle_info);
-        
+        console.log('🔧 Works:', worksData.length);
+        console.log('🔩 Parts:', partsData.length);
+        console.log('📦 All items:', allItems.length);
+
         setOrder(orderData);
-        setItems(itemsData);
+        setItems(allItems);  // ← Передаём объединённый массив
       } catch (err) {
         console.error('❌ Error fetching order:', err);
         setError(err.message);
