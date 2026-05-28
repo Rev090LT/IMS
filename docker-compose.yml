@@ -9,7 +9,7 @@ services:
       POSTGRES_USER: inventory_user
       POSTGRES_PASSWORD: Knightrider2005
     volumes:
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./init.sql:/docker-entrypoint-initdb.d/init2.sql
       - postgres_data:/var/lib/postgresql/data
       - ./pg_backup:/var/lib/postgresql/backup  
     ports:
