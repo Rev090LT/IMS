@@ -6,10 +6,11 @@ function WorkOrderDetail({ token }) {
   const { id } = useParams();
   const navigate = useNavigate();
   const [order, setOrder] = useState(null);
-  const [items, setItems] = useState([]);
+  const [works, setWorks] = useState([]);      // 🔥 Отдельно работы
+  const [parts, setParts] = useState([]);      // 🔥 Отдельно запчасти
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [deleting, setDeleting] = useState(false); // 🔥 Состояние для удаления
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     const fetchOrder = async () => {
@@ -31,20 +32,17 @@ function WorkOrderDetail({ token }) {
 
         const orderData = data.work_order || data.order || data;
 
-        // 🔥 Читаем work_items и parts_items отдельно (так возвращает бэкенд)
+        // 🔥 Читаем work_items и parts_items отдельно
         const worksData = Array.isArray(data.work_items) ? data.work_items : [];
         const partsData = Array.isArray(data.parts_items) ? data.parts_items : [];
-
-        // 🔥 Объединяем для отображения
-        const allItems = [...worksData, ...partsData];
 
         console.log('📦 Parsed order:', orderData);
         console.log('🔧 Works:', worksData.length);
         console.log('🔩 Parts:', partsData.length);
-        console.log('📦 All items:', allItems.length);
 
         setOrder(orderData);
-        setItems(allItems);  // ← Передаём объединённый массив
+        setWorks(worksData);   // 🔥 Сохраняем работы
+        setParts(partsData);   // 🔥 Сохраняем запчасти
       } catch (err) {
         console.error('❌ Error fetching order:', err);
         setError(err.message);
@@ -60,32 +58,8 @@ function WorkOrderDetail({ token }) {
   useEffect(() => {
     if (order) {
       console.log('🔄 Order state updated:', order);
-      
-      const customerName = order?.customer_name || '—';
-      const phone = order?.customer_phone || order?.phone_primary || '—';
-      const loyaltyLevel = order?.customer_loyalty_level || order?.loyalty_level || '—';
-      
-      const vehicleRaw = order?.vehicle_info;
-      const vehicle = typeof vehicleRaw === 'string' 
-        ? (() => { try { return JSON.parse(vehicleRaw); } catch { return {}; } })()
-        : (vehicleRaw || {});
-      
-      const vehicleBrand = vehicle?.brand || order?.brand || '—';
-      const vehicleModel = vehicle?.model || order?.model || '—';
-      
-      console.log('🧩 Extracted values:');
-      console.log('  - orderNumber:', order?.order_number || `#${order?.id}`);
-      console.log('  - customerName:', customerName);
-      console.log('  - vehicleBrand:', vehicleBrand);
-      console.log('  - vehicleModel:', vehicleModel);
-      console.log('  - hasVehicleData:', [vehicleBrand, vehicleModel].some(v => v !== '—'));
     }
-    
-    if (items && items.length > 0) {
-      console.log('🔧 Items count:', items.length);
-      console.log('🔧 First item:', items[0]);
-    }
-  }, [order, items]);
+  }, [order]);
 
   // 🔧 Функция удаления заказ-наряда
   const handleDeleteOrder = async () => {
@@ -151,9 +125,17 @@ function WorkOrderDetail({ token }) {
   const orderNumber = order?.order_number || `#${order?.id}`;
   const status = order?.status || '—';
   const customerName = order?.customer_name || '—';
-  const phone = order?.phone_primary || order?.customer_phone || '—';
+  const phone = order?.customer_phone || order?.phone_primary || '—';
   const complaint = order?.complaint || order?.description || '—';
   const finalTotal = order?.final_total || order?.total_cost || 0;
+
+  // 🔥 Считаем итоги отдельно
+  const worksTotal = works.reduce((sum, item) => 
+    sum + (Number(item.total_price) || (item.quantity || 1) * (item.unit_price || 0)), 0
+  );
+  const partsTotal = parts.reduce((sum, item) => 
+    sum + (Number(item.total_price) || (item.quantity || 1) * (item.unit_price || 0)), 0
+  );
 
   const parseDate = (val) => {
     if (!val) return '—';
@@ -198,7 +180,8 @@ function WorkOrderDetail({ token }) {
       waiting_parts: '#e67e22',
       ready: '#27ae60',
       completed: '#229954',
-      cancelled: '#e74c3c'
+      cancelled: '#e74c3c',
+      pending: '#3498db'
     };
     return colors[status?.toLowerCase()] || '#95a5a6';
   };
@@ -278,6 +261,27 @@ function WorkOrderDetail({ token }) {
           >
             {deleting ? '⏳...' : '🗑️ Удалить'}
           </button>
+                    {/* 🖨️ Кнопка Печать/PDF */}
+          <button 
+            onClick={() => window.open(`/api/crm/work-orders/${id}/pdf`, '_blank')}
+            style={{ 
+              padding: '10px 18px', 
+              backgroundColor: '#27ae60', 
+              color: 'white', 
+              border: 'none', 
+              borderRadius: '6px', 
+              cursor: 'pointer',
+              fontSize: '14px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              transition: 'background 0.2s'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#229954'}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#27ae60'}
+          >
+            🖨️ Печать / PDF
+          </button>
           
           {/* ← Назад */}
           <button 
@@ -321,7 +325,7 @@ function WorkOrderDetail({ token }) {
             </div>
           )}
           <div>
-            <label style={{ fontSize: '13px', color: '#666' }}>Сумма</label>
+            <label style={{ fontSize: '13px', color: '#666' }}>Итого</label>
             <div style={{ fontWeight: '500', color: '#27ae60', fontSize: '18px' }}>{Number(finalTotal).toLocaleString('ru-RU')} ₽</div>
           </div>
         </div>
@@ -397,83 +401,199 @@ function WorkOrderDetail({ token }) {
         <p style={{ margin: 0, color: '#333', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>{complaint}</p>
       </div>
 
-      {/* 🔹 Элементы заказ-наряда */}
-      <div style={{ backgroundColor: 'white', padding: '20px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
-        <h2 style={{ margin: '0 0 15px', fontSize: '18px' }}>🔧 Работы и запчасти</h2>
-        {items.length === 0 ? (
-          <p style={{ color: '#999', textAlign: 'center', padding: '20px' }}>Нет элементов</p>
+      {/* 🔹 🔧 РАБОТЫ — отдельная таблица */}
+      <div style={{ backgroundColor: 'white', padding: '20px', borderRadius: '12px', marginBottom: '20px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+          <h2 style={{ margin: 0, fontSize: '18px' }}>🔧 Работы ({works.length})</h2>
+          <div style={{ fontSize: '16px', fontWeight: '600', color: '#27ae60' }}>
+            Итого: {worksTotal.toLocaleString('ru-RU')} ₽
+          </div>
+        </div>
+        {works.length === 0 ? (
+          <p style={{ color: '#999', textAlign: 'center', padding: '20px', fontStyle: 'italic' }}>
+            Работы не добавлены
+          </p>
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
-                <tr style={{ backgroundColor: '#f8f9fa', borderBottom: '2px solid #ddd' }}>
-                  <th style={{ padding: '12px', textAlign: 'left' }}>Наименование</th>
-                  <th style={{ padding: '12px', textAlign: 'left' }}>Категория</th>
-                  <th style={{ padding: '12px', textAlign: 'left' }}>Артикул</th>
-                  <th style={{ padding: '12px', textAlign: 'right' }}>Кол-во</th>
-                  <th style={{ padding: '12px', textAlign: 'right' }}>Ед.</th>
-                  <th style={{ padding: '12px', textAlign: 'right' }}>Нормо-часы</th>
-                  <th style={{ padding: '12px', textAlign: 'right' }}>Цена</th>
-                  <th style={{ padding: '12px', textAlign: 'right' }}>Сумма</th>
-                  <th style={{ padding: '12px', textAlign: 'center' }}>Статус</th>
+                <tr style={{ backgroundColor: '#f0fdf4', borderBottom: '2px solid #27ae60' }}>
+                  <th style={thStyle}>Наименование</th>
+                  <th style={thStyle}>Категория</th>
+                  <th style={{ ...thStyle, textAlign: 'right', width: '100px' }}>Нормо-часы</th>
+                  <th style={{ ...thStyle, textAlign: 'right', width: '120px' }}>Цена</th>
+                  <th style={{ ...thStyle, textAlign: 'right', width: '130px' }}>Сумма</th>
+                  <th style={{ ...thStyle, textAlign: 'center', width: '100px' }}>Статус</th>
                 </tr>
               </thead>
               <tbody>
-                {items.map((item) => {
-                  const isPart = item.part_number || item.item_type === 'part';
-                  const isWork = item.service_id || item.labor_hours > 0 || item.item_type === 'labor';
-                  
-                  return (
-                    <tr key={item.id} style={{ borderBottom: '1px solid #eee', backgroundColor: isPart ? '#fff5f5' : 'white' }}>
-                      <td style={{ padding: '12px' }}>
-                        <div style={{ fontWeight: '500' }}>{item.name || item.service_name || '—'}</div>
-                        {item.notes && (
-                          <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>{item.notes}</div>
-                        )}
-                      </td>
-                      <td style={{ padding: '12px' }}>
-                        {item.category && (
-                          <span style={{ backgroundColor: '#ebf5fb', color: '#2980b9', padding: '2px 8px', borderRadius: '4px', fontSize: '12px' }}>
-                            {item.category}
-                          </span>
-                        )}
-                      </td>
-                      <td style={{ padding: '12px' }}>
-                        {item.part_number && (
-                          <span style={{ fontFamily: 'monospace', fontSize: '12px', color: '#666' }}>{item.part_number}</span>
-                        )}
-                      </td>
-                      <td style={{ padding: '12px', textAlign: 'right' }}>{item.quantity || 1}</td>
-                      <td style={{ padding: '12px', textAlign: 'right' }}>{item.unit || (isPart ? 'шт' : 'усл')}</td>
-                      <td style={{ padding: '12px', textAlign: 'right' }}>{item.labor_hours || item.service_labor_hours || '—'}</td>
-                      <td style={{ padding: '12px', textAlign: 'right' }}>{Number(item.unit_price || 0).toLocaleString('ru-RU')} ₽</td>
-                      <td style={{ padding: '12px', textAlign: 'right', fontWeight: '600', color: '#27ae60' }}>
-                        {Number(item.total_price || 0).toLocaleString('ru-RU')} ₽
-                      </td>
-                      <td style={{ padding: '12px', textAlign: 'center' }}>
-                        {item.status && (
-                          <span style={{ 
-                            padding: '2px 8px', 
-                            backgroundColor: getStatusColor(item.status), 
-                            color: 'white', 
-                            borderRadius: '4px',
-                            fontSize: '11px'
-                          }}>
-                            {item.status}
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
+                {works.map((item) => (
+                  <tr key={item.id} style={{ borderBottom: '1px solid #eee' }}>
+                    <td style={tdStyle}>
+                      <div style={{ fontWeight: '500' }}>{item.name || item.service_name || '—'}</div>
+                      {item.notes && (
+                        <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>💬 {item.notes}</div>
+                      )}
+                    </td>
+                    <td style={tdStyle}>
+                      {item.category && (
+                        <span style={{ backgroundColor: '#ebf5fb', color: '#2980b9', padding: '2px 8px', borderRadius: '4px', fontSize: '12px' }}>
+                          {item.category}
+                        </span>
+                      )}
+                    </td>
+                    <td style={{ ...tdStyle, textAlign: 'right' }}>
+                      {item.labor_hours || item.service_labor_hours || '—'}
+                    </td>
+                    <td style={{ ...tdStyle, textAlign: 'right' }}>
+                      {Number(item.unit_price || 0).toLocaleString('ru-RU')} ₽
+                    </td>
+                    <td style={{ ...tdStyle, textAlign: 'right', fontWeight: '600', color: '#27ae60' }}>
+                      {Number(item.total_price || (item.quantity || 1) * (item.unit_price || 0)).toLocaleString('ru-RU')} ₽
+                    </td>
+                    <td style={{ ...tdStyle, textAlign: 'center' }}>
+                      {item.status && (
+                        <span style={{ 
+                          padding: '2px 8px', 
+                          backgroundColor: getStatusColor(item.status), 
+                          color: 'white', 
+                          borderRadius: '4px',
+                          fontSize: '11px'
+                        }}>
+                          {item.status}
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
         )}
       </div>
 
+      {/* 🔹 🔩 ЗАПЧАСТИ — отдельная таблица */}
+      <div style={{ backgroundColor: 'white', padding: '20px', borderRadius: '12px', marginBottom: '20px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+          <h2 style={{ margin: 0, fontSize: '18px' }}>🔩 Запчасти ({parts.length})</h2>
+          <div style={{ fontSize: '16px', fontWeight: '600', color: '#e67e22' }}>
+            Итого: {partsTotal.toLocaleString('ru-RU')} ₽
+          </div>
+        </div>
+        {parts.length === 0 ? (
+          <p style={{ color: '#999', textAlign: 'center', padding: '20px', fontStyle: 'italic' }}>
+            Запчасти не добавлены
+          </p>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ backgroundColor: '#fff5f5', borderBottom: '2px solid #e67e22' }}>
+                  <th style={thStyle}>Наименование</th>
+                  <th style={thStyle}>Артикул</th>
+                  <th style={thStyle}>Производитель</th>
+                  <th style={{ ...thStyle, textAlign: 'right', width: '80px' }}>Кол-во</th>
+                  <th style={{ ...thStyle, textAlign: 'right', width: '120px' }}>Цена</th>
+                  <th style={{ ...thStyle, textAlign: 'right', width: '130px' }}>Сумма</th>
+                  <th style={{ ...thStyle, textAlign: 'center', width: '100px' }}>Статус</th>
+                </tr>
+              </thead>
+              <tbody>
+                {parts.map((item) => (
+                  <tr key={item.id} style={{ borderBottom: '1px solid #eee', backgroundColor: '#fffafa' }}>
+                    <td style={tdStyle}>
+                      <div style={{ fontWeight: '500' }}>{item.name || '—'}</div>
+                      {item.description && (
+                        <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>
+                          📝 {item.description.substring(0, 80)}{item.description.length > 80 ? '...' : ''}
+                        </div>
+                      )}
+                    </td>
+                    <td style={tdStyle}>
+                      {item.part_number && (
+                        <span style={{ fontFamily: 'monospace', fontSize: '12px', color: '#666', backgroundColor: '#f0f0f0', padding: '2px 6px', borderRadius: '3px' }}>
+                          {item.part_number}
+                        </span>
+                      )}
+                    </td>
+                    <td style={tdStyle}>
+                      {item.manufacturer && (
+                        <span style={{ fontSize: '13px', color: '#555' }}>🏭 {item.manufacturer}</span>
+                      )}
+                    </td>
+                    <td style={{ ...tdStyle, textAlign: 'right' }}>
+                      {item.quantity || 1} {item.unit || 'шт'}
+                    </td>
+                    <td style={{ ...tdStyle, textAlign: 'right' }}>
+                      {Number(item.unit_price || 0).toLocaleString('ru-RU')} ₽
+                    </td>
+                    <td style={{ ...tdStyle, textAlign: 'right', fontWeight: '600', color: '#e67e22' }}>
+                      {Number(item.total_price || (item.quantity || 1) * (item.unit_price || 0)).toLocaleString('ru-RU')} ₽
+                    </td>
+                    <td style={{ ...tdStyle, textAlign: 'center' }}>
+                      {item.status && (
+                        <span style={{ 
+                          padding: '2px 8px', 
+                          backgroundColor: getStatusColor(item.status), 
+                          color: 'white', 
+                          borderRadius: '4px',
+                          fontSize: '11px'
+                        }}>
+                          {item.status}
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* 🔹 💰 ИТОГО */}
+      <div style={{ backgroundColor: 'white', padding: '20px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)', border: '2px solid #27ae60' }}>
+        <h2 style={{ margin: '0 0 15px', fontSize: '18px' }}>💰 Итого по заказ-наряду</h2>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px' }}>
+          <div style={{ padding: '15px', backgroundColor: '#f0fdf4', borderRadius: '8px', borderLeft: '4px solid #27ae60' }}>
+            <div style={{ fontSize: '13px', color: '#666', marginBottom: '5px' }}>🔧 Работы</div>
+            <div style={{ fontSize: '20px', fontWeight: '600', color: '#27ae60' }}>
+              {worksTotal.toLocaleString('ru-RU')} ₽
+            </div>
+            <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>{works.length} позиций</div>
+          </div>
+          <div style={{ padding: '15px', backgroundColor: '#fff5f5', borderRadius: '8px', borderLeft: '4px solid #e67e22' }}>
+            <div style={{ fontSize: '13px', color: '#666', marginBottom: '5px' }}>🔩 Запчасти</div>
+            <div style={{ fontSize: '20px', fontWeight: '600', color: '#e67e22' }}>
+              {partsTotal.toLocaleString('ru-RU')} ₽
+            </div>
+            <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>{parts.length} позиций</div>
+          </div>
+          <div style={{ padding: '15px', backgroundColor: '#f0f9ff', borderRadius: '8px', borderLeft: '4px solid #3498db' }}>
+            <div style={{ fontSize: '13px', color: '#666', marginBottom: '5px' }}>💰 ИТОГО</div>
+            <div style={{ fontSize: '24px', fontWeight: '700', color: '#2c3e50' }}>
+              {Number(finalTotal).toLocaleString('ru-RU')} ₽
+            </div>
+          </div>
+        </div>
+      </div>
+
     </div>
   );
 }
+
+// 🔧 Стили для таблиц
+const thStyle = { 
+  padding: '12px', 
+  textAlign: 'left', 
+  fontWeight: '600', 
+  color: '#555', 
+  fontSize: '13px' 
+};
+
+const tdStyle = { 
+  padding: '12px', 
+  verticalAlign: 'middle' 
+};
 
 export default WorkOrderDetail;

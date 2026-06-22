@@ -974,7 +974,7 @@ CREATE TRIGGER trg_car_platforms_updated_at BEFORE UPDATE ON car_platforms FOR E
 -- ============================================================================
 
 INSERT INTO users (username, email, password_hash, role, full_name) VALUES 
-('admin', 'admin@ims.local', '$2b$10$YourHashedPasswordHere', 'admin', 'Администратор Системы')
+('admin', 'admin@ims.local', '$2a$12$Su4wgOX.RUfuM/G42zrvzOfNXWikliIoyBIbSa5Ge62nBOQpFNIXK', 'admin', 'Администратор Системы')
 ON CONFLICT (email) DO NOTHING;
 
 INSERT INTO locations (name, description) VALUES 
