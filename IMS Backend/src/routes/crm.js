@@ -12,6 +12,9 @@ import path from 'path';
 const router = express.Router();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+const FONT_PATH = path.join(__dirname, '../fonts/DejaVuSans.ttf');
+const FONT_BOLD_PATH = path.join(__dirname, '../fonts/DejaVuSans-Bold.ttf');
+
 
 const serviceUpload = multer({
   storage: multer.diskStorage({
@@ -1418,18 +1421,100 @@ router.get('/dashboard/quick-stats', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+function drawTable(doc, columns, rows, startY) {
+  const pageWidth = 595; // A4
+  const margin = 40;
+  const tableWidth = pageWidth - 2 * margin;
+  const rowHeight = 22;
+  const headerHeight = 25;
+  
+  // Рассчитываем ширину колонок
+  const totalWidth = columns.reduce((sum, col) => sum + col.width, 0);
+  const scale = tableWidth / totalWidth;
+  
+  let x = margin;
+  let y = startY;
+  
+  // 🔹 Рисуем заголовок
+  doc.rect(margin, y, tableWidth, headerHeight).fill('#2c3e50');
+  doc.fillColor('white').fontSize(10).font(path.join(__dirname, '../fonts/DejaVuSans-Bold.ttf'));
+  
+  let colX = margin;
+  columns.forEach(col => {
+    const colWidth = col.width * scale;
+    if (col.align === 'right') {
+      doc.text(col.title, colX + 5, y + 6, { 
+        width: colWidth - 10, 
+        align: 'right' 
+      });
+    } else {
+      doc.text(col.title, colX + 5, y + 6, { 
+        width: colWidth - 10 
+      });
+    }
+    colX += colWidth;
+  });
+  
+  y += headerHeight;
+  
+  // 🔹 Рисуем строки
+  doc.font(path.join(__dirname, '../fonts/DejaVuSans.ttf')).fontSize(10);
+  
+  rows.forEach((row, index) => {
+    // Чередование цветов
+    if (index % 2 === 0) {
+      doc.rect(margin, y, tableWidth, rowHeight).fill('#f8f9fa');
+    } else {
+      doc.rect(margin, y, tableWidth, rowHeight).fill('white');
+    }
+    
+    doc.fillColor('black');
+    colX = margin;
+    
+    columns.forEach((col, colIndex) => {
+      const colWidth = col.width * scale;
+      const cellValue = row[colIndex] !== undefined ? row[colIndex] : '';
+      
+      if (col.align === 'right') {
+        doc.text(String(cellValue), colX + 5, y + 5, { 
+          width: colWidth - 10, 
+          align: 'right' 
+        });
+      } else {
+        doc.text(String(cellValue), colX + 5, y + 5, { 
+          width: colWidth - 10 
+        });
+      }
+      colX += colWidth;
+    });
+    
+    y += rowHeight;
+    
+    // Новая страница если нужно
+    if (y > 750) {
+      doc.addPage();
+      y = 50;
+    }
+  });
+  
+  // 🔹 Рамка таблицы
+  doc.rect(margin, startY, tableWidth, y - startY).stroke();
+  
+  return y;
+}
+
+// ============================================================================
+// GET /api/crm/work-orders/:id/pdf — Генерация PDF (ФИНАЛЬНАЯ ВЕРСИЯ)
+// ============================================================================
 router.get('/work-orders/:id/pdf', async (req, res) => {
   try {
     const { id } = req.params;
     
-    // Получаем данные заказ-наряда
     const wo = await pool.query(`
       SELECT 
-        wo.id, wo.order_number, wo.status, wo.complaint, wo.notes, wo.description,
+        wo.id, wo.order_number, wo.complaint, wo.notes,
         wo.vehicle_info, wo.final_total, wo.total_cost,
-        wo.created_at, wo.updated_at, wo.started_at, wo.completed_at,
-        wo.promised_at,
-        wo.customer_id, wo.vehicle_id, wo.assigned_master, wo.assigned_bay,
+        wo.created_at,
         COALESCE(cp.company_name, cp.fio) AS customer_name,
         cp.phone AS customer_phone,
         COALESCE(wo.vehicle_info->>'brand', v.brand) AS brand,
@@ -1442,64 +1527,69 @@ router.get('/work-orders/:id/pdf', async (req, res) => {
       WHERE wo.id = $1
     `, [id]);
     
-    if (wo.rows.length === 0) {
-      return res.status(404).json({ error: 'Заказ-наряд не найден' });
-    }
+    if (wo.rows.length === 0) return res.status(404).json({ error: 'Заказ-наряд не найден' });
     
     const order = wo.rows[0];
     
-    // Получаем работы и запчасти
     const items = await pool.query(`
       SELECT 
-        woi.id, woi.item_type, woi.service_id, woi.part_id,
+        woi.item_type, woi.service_id, woi.part_id,
         woi.name, woi.category, woi.quantity, woi.unit, woi.unit_price,
-        woi.total_price, woi.labor_hours, woi.part_number, woi.manufacturer,
-        s.name AS service_name, s.category AS service_category
+        woi.total_price, woi.labor_hours, woi.part_number, woi.manufacturer
       FROM work_order_items woi
-      LEFT JOIN services s ON woi.service_id = s.id
       WHERE woi.work_order_id = $1
-      ORDER BY woi.item_type, woi.id
+      ORDER BY woi.id
     `, [id]);
     
-    const works = items.rows.filter(item => item.item_type === 'labor' || item.service_id !== null);
-    const parts = items.rows.filter(item => item.item_type === 'part' || item.part_id !== null);
+    // 🔥 ПРАВИЛЬНЫЙ ФИЛЬТР: исключаем дублирование
+    // Работы = тип 'labor' ИЛИ (есть labor_hours и нет part_id)
+    const works = items.rows.filter(item => 
+      item.item_type === 'labor' || 
+      (item.part_id === null && !item.part_number && item.labor_hours !== null)
+    );
     
-    // Создаём PDF
-    const doc = new PDFDocument({ 
-      size: 'A4', 
-      margins: { top: 50, bottom: 50, left: 40, right: 40 } 
+    // Запчасти = тип 'part' ИЛИ (есть part_id ИЛИ part_number) И НЕ в работах
+    const workIds = new Set(works.map(w => items.rows.indexOf(w)));
+    const parts = items.rows.filter((item, index) => {
+      if (workIds.has(index)) return false; // уже в работах
+      return item.item_type === 'part' || 
+             item.part_id !== null || 
+             item.part_number !== null;
     });
     
-    // Заголовки для скачивания
+    console.log('🔧 Works:', works.length, works.map(w => w.name));
+    console.log('🔩 Parts:', parts.length, parts.map(p => p.name));
+
+    const doc = new PDFDocument({ size: 'A4', margins: { top: 50, bottom: 50, left: 40, right: 40 } });
+    
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename=work-order-${order.order_number}.pdf`);
     
-    // Pipe в response
     doc.pipe(res);
+    doc.registerFont('Normal', FONT_PATH);
+    doc.registerFont('Bold', FONT_BOLD_PATH);
+    doc.font('Normal');
     
     // ==================== ШАПКА ====================
-    doc.fontSize(24).text('ЗАКАЗ-НАРЯД', { align: 'center' });
-    doc.moveDown(0.5);
-    doc.fontSize(14).text(`№ ${order.order_number}`, { align: 'center' });
-    doc.fontSize(12).text(`от ${new Date(order.created_at).toLocaleDateString('ru-RU')}`, { align: 'center' });
-    doc.moveDown(1);
-    
-    // Линия
+    doc.font('Bold').fontSize(22).text('ЗАКАЗ-НАРЯД', { align: 'center' });
+    doc.moveDown(0.3);
+    doc.font('Normal').fontSize(14).text(`№ ${order.order_number}`, { align: 'center' });
+    doc.fontSize(11).text(`от ${new Date(order.created_at).toLocaleDateString('ru-RU')}`, { align: 'center' });
+    doc.moveDown(0.8);
     doc.moveTo(40, doc.y).lineTo(555, doc.y).stroke();
     doc.moveDown(0.5);
     
-    // ==================== ИНФОРМАЦИЯ О КЛИЕНТЕ ====================
-    doc.fontSize(14).text('ИНФОРМАЦИЯ О КЛИЕНТЕ', { underline: true });
-    doc.moveDown(0.3);
-    doc.fontSize(11);
+    // ==================== КЛИЕНТ И АВТО ====================
+    doc.font('Bold').fontSize(12).text('ИНФОРМАЦИЯ О КЛИЕНТЕ');
+    doc.moveDown(0.2);
+    doc.font('Normal').fontSize(10);
     doc.text(`Клиент: ${order.customer_name || '—'}`);
     doc.text(`Телефон: ${order.customer_phone || '—'}`);
     doc.moveDown(0.5);
     
-    // ==================== АВТОМОБИЛЬ ====================
-    doc.fontSize(14).text('АВТОМОБИЛЬ', { underline: true });
-    doc.moveDown(0.3);
-    doc.fontSize(11);
+    doc.font('Bold').fontSize(12).text('АВТОМОБИЛЬ');
+    doc.moveDown(0.2);
+    doc.font('Normal').fontSize(10);
     doc.text(`Марка: ${order.brand || '—'}`);
     doc.text(`Модель: ${order.model || '—'}`);
     doc.text(`VIN: ${order.vin || '—'}`);
@@ -1507,128 +1597,178 @@ router.get('/work-orders/:id/pdf', async (req, res) => {
     doc.moveDown(0.5);
     
     // ==================== ЖАЛОБА ====================
-    doc.fontSize(14).text('ЖАЛОБА КЛИЕНТА', { underline: true });
-    doc.moveDown(0.3);
-    doc.fontSize(11).text(order.complaint || '—', { align: 'justify' });
+    doc.font('Bold').fontSize(12).text('ЖАЛОБА КЛИЕНТА');
+    doc.moveDown(0.2);
+    doc.font('Normal').fontSize(10);
+    doc.text(order.complaint || '—', { align: 'left' }); // 🔥 было justify
     doc.moveDown(0.5);
-    
-    // Линия
     doc.moveTo(40, doc.y).lineTo(555, doc.y).stroke();
     doc.moveDown(0.5);
     
     // ==================== РАБОТЫ ====================
-    doc.fontSize(14).text('ВЫПОЛНЕННЫЕ РАБОТЫ', { underline: true });
+    doc.font('Bold').fontSize(12).text('ВЫПОЛНЕННЫЕ РАБОТЫ');
     doc.moveDown(0.3);
     
-    if (works.length === 0) {
-      doc.fontSize(11).text('Работы не выполнялись', { italics: true });
-    } else {
-      // Таблица работ
-      const tableTop = doc.y;
-      
-      // Заголовки
-      doc.fontSize(10).text('Наименование', 40, tableTop, { width: 250 });
-      doc.text('Кол-во', 290, tableTop, { width: 60, align: 'right' });
-      doc.text('Цена', 350, tableTop, { width: 80, align: 'right' });
-      doc.text('Сумма', 430, tableTop, { width: 80, align: 'right' });
-      
-      doc.moveDown(0.3);
+    if (works.length > 0) {
+      const tableX = 40;
+      const tableWidth = 515;
+      const colWidths = [180, 110, 60, 80, 85]; 
       
       let y = doc.y;
+      doc.rect(tableX, y, tableWidth, 20).fill('#2c3e50');
+      doc.fillColor('white').font('Bold').fontSize(9);
+      
+      let x = tableX;
+      const headers = ['Наименование', 'Категория', 'Часы', 'Цена', 'Сумма'];
+      headers.forEach((header, i) => {
+        const align = i >= 2 ? 'right' : 'left';
+        doc.text(header, x + 3, y + 5, { width: colWidths[i] - 6, align });
+        x += colWidths[i];
+      });
+      
+      y += 20;
+      doc.fillColor('black').font('Normal').fontSize(9);
+      
       works.forEach((work, index) => {
         const total = (work.quantity || 1) * (work.unit_price || 0);
         
-        doc.fontSize(10).text(work.name || work.service_name || '—', 40, y, { width: 250 });
-        doc.text(String(work.quantity || 1), 290, y, { width: 60, align: 'right' });
-        doc.text(`${(work.unit_price || 0).toLocaleString('ru-RU')} ₽`, 350, y, { width: 80, align: 'right' });
-        doc.text(`${total.toLocaleString('ru-RU')} ₽`, 430, y, { width: 80, align: 'right' });
-        
-        y += 20;
-        
-        // Новая страница если нужно
-        if (y > 750) {
-          doc.addPage();
-          y = 50;
+        if (index % 2 === 0) {
+          doc.rect(tableX, y, tableWidth, 18).fill('#f8f9fa');
         }
+        
+        doc.fillColor('black');
+        x = tableX;
+        
+        doc.text(work.name || '—', x + 3, y + 4, { width: colWidths[0] - 6 });
+        x += colWidths[0];
+        
+        doc.text(work.category || '—', x + 3, y + 4, { width: colWidths[1] - 6 });
+        x += colWidths[1];
+        
+        doc.text(String(work.labor_hours || '—'), x + 3, y + 4, { width: colWidths[2] - 6, align: 'right' });
+        x += colWidths[2];
+        
+        doc.text(`${(work.unit_price || 0).toLocaleString('ru-RU')} ₽`, x + 3, y + 4, { width: colWidths[3] - 6, align: 'right' });
+        x += colWidths[3];
+        
+        doc.text(`${total.toLocaleString('ru-RU')} ₽`, x + 3, y + 4, { width: colWidths[4] - 6, align: 'right' });
+        
+        y += 18;
       });
       
-      doc.moveDown(1);
-      
-      // Итого по работам
-      const worksTotal = works.reduce((sum, w) => sum + ((w.quantity || 1) * (w.unit_price || 0)), 0);
-      doc.fontSize(11).text(`Итого по работам: ${worksTotal.toLocaleString('ru-RU')} ₽`, { align: 'right' });
-    }
-    
-    doc.moveDown(0.5);
-    
-    // ==================== ЗАПЧАСТИ ====================
-    doc.fontSize(14).text('ЗАПЧАСТИ', { underline: true });
-    doc.moveDown(0.3);
-    
-    if (parts.length === 0) {
-      doc.fontSize(11).text('Запчасти не устанавливались', { italics: true });
-    } else {
-      // Таблица запчастей
-      const tableTop = doc.y;
-      
-      // Заголовки
-      doc.fontSize(10).text('Наименование', 40, tableTop, { width: 200 });
-      doc.text('Артикул', 240, tableTop, { width: 100 });
-      doc.text('Кол-во', 340, tableTop, { width: 60, align: 'right' });
-      doc.text('Цена', 400, tableTop, { width: 80, align: 'right' });
-      doc.text('Сумма', 480, tableTop, { width: 80, align: 'right' });
+      doc.rect(tableX, doc.y - (works.length * 18 + 20), tableWidth, works.length * 18 + 20).stroke();
       
       doc.moveDown(0.3);
+      const worksTotal = works.reduce((sum, w) => sum + ((w.quantity || 1) * (w.unit_price || 0)), 0);
+      doc.font('Bold').fontSize(11).text(`Итого по работам: ${worksTotal.toLocaleString('ru-RU')} ₽`, { align: 'right' });
+      doc.moveDown(0.5);
+    } else {
+      doc.font('Normal').fontSize(10).text('Работы не выполнялись', { italics: true });
+      doc.moveDown(0.5);
+    }
+    
+    // ==================== ЗАПЧАСТИ ====================
+    doc.font('Bold').fontSize(12).text('ЗАПЧАСТИ');
+    doc.moveDown(0.3);
+    
+    if (parts.length > 0) {
+      const tableX = 40;
+      const tableWidth = 515;
+      const colWidths = [130, 80, 80, 60, 80, 85]; 
       
       let y = doc.y;
+      doc.rect(tableX, y, tableWidth, 20).fill('#2c3e50');
+      doc.fillColor('white').font('Bold').fontSize(9);
+      
+      let x = tableX;
+      const headers = ['Наименование', 'Артикул', 'Произв.', 'Кол-во', 'Цена', 'Сумма'];
+      headers.forEach((header, i) => {
+        const align = i >= 3 ? 'right' : 'left';
+        doc.text(header, x + 3, y + 5, { width: colWidths[i] - 6, align });
+        x += colWidths[i];
+      });
+      
+      y += 20;
+      doc.fillColor('black').font('Normal').fontSize(9);
+      
       parts.forEach((part, index) => {
         const total = (part.quantity || 1) * (part.unit_price || 0);
         
-        doc.fontSize(10).text(part.name || '—', 40, y, { width: 200 });
-        doc.text(part.part_number || '—', 240, y, { width: 100 });
-        doc.text(String(part.quantity || 1), 340, y, { width: 60, align: 'right' });
-        doc.text(`${(part.unit_price || 0).toLocaleString('ru-RU')} ₽`, 400, y, { width: 80, align: 'right' });
-        doc.text(`${total.toLocaleString('ru-RU')} ₽`, 480, y, { width: 80, align: 'right' });
-        
-        y += 20;
-        
-        if (y > 750) {
-          doc.addPage();
-          y = 50;
+        if (index % 2 === 0) {
+          doc.rect(tableX, y, tableWidth, 18).fill('#f8f9fa');
         }
+        
+        doc.fillColor('black');
+        x = tableX;
+        
+        doc.text(part.name || '—', x + 3, y + 4, { width: colWidths[0] - 6 });
+        x += colWidths[0];
+        
+        doc.text(part.part_number || '—', x + 3, y + 4, { width: colWidths[1] - 6 });
+        x += colWidths[1];
+        
+        doc.text(part.manufacturer || '—', x + 3, y + 4, { width: colWidths[2] - 6 });
+        x += colWidths[2];
+        
+        doc.text(`${part.quantity || 1} ${part.unit || 'шт'}`, x + 3, y + 4, { width: colWidths[3] - 6, align: 'right' });
+        x += colWidths[3];
+        
+        doc.text(`${(part.unit_price || 0).toLocaleString('ru-RU')} ₽`, x + 3, y + 4, { width: colWidths[4] - 6, align: 'right' });
+        x += colWidths[4];
+        
+        doc.text(`${total.toLocaleString('ru-RU')} ₽`, x + 3, y + 4, { width: colWidths[5] - 6, align: 'right' });
+        
+        y += 18;
       });
       
-      doc.moveDown(1);
+      doc.rect(tableX, doc.y - (parts.length * 18 + 20), tableWidth, parts.length * 18 + 20).stroke();
       
-      // Итого по запчастям
+      doc.moveDown(0.3);
       const partsTotal = parts.reduce((sum, p) => sum + ((p.quantity || 1) * (p.unit_price || 0)), 0);
-      doc.fontSize(11).text(`Итого по запчастям: ${partsTotal.toLocaleString('ru-RU')} ₽`, { align: 'right' });
+      doc.font('Bold').fontSize(11).text(`Итого по запчастям: ${partsTotal.toLocaleString('ru-RU')} ₽`, { align: 'right' });
+      doc.moveDown(0.5);
+    } else {
+      doc.font('Normal').fontSize(10).text('Запчасти не устанавливались', { italics: true });
+      doc.moveDown(0.5);
     }
-    
-    doc.moveDown(1);
     
     // ==================== ИТОГО ====================
     doc.moveTo(40, doc.y).lineTo(555, doc.y).stroke();
     doc.moveDown(0.3);
     
     const finalTotal = order.final_total || order.total_cost || 0;
-    doc.fontSize(16).text(`ВСЕГО К ОПЛАТЕ: ${finalTotal.toLocaleString('ru-RU')} ₽`, { align: 'right', bold: true });
+    // 🔥 Используем align: 'right' без justify
+    doc.font('Bold').fontSize(14).text(`ВСЕГО К ОПЛАТЕ: ${finalTotal.toLocaleString('ru-RU')} ₽`, { align: 'right', lineGap: 2 });
+
+    // ==================== ГАРАНТИЯ ====================
+    doc.moveDown(0.8);
+    doc.font('Bold').fontSize(10).text('ГАРАНТИЙНЫЕ УСЛОВИЯ');
+    doc.moveDown(0.3);
+    doc.font('Normal').fontSize(8);
+
+    // 🔥 Используем align: 'left' вместо justify — текст не будет растягиваться
+    const warrantyLines = [
+      '1. Гарантия на выполненные работы — 30 календарных дней с момента завершения.',
+      '2. Гарантия на установленные запчасти — 90 календарных дней.',
+      '3. Гарантия не распространяется на случаи неправильной эксплуатации.',
+      '4. При обнаружении неисправности обращайтесь: +7 (982) 968-07-78',
+      '5. Для обращения по гарантии предъявите данный заказ-наряд.'
+    ];
     
-    doc.moveDown(1);
+    warrantyLines.forEach(line => {
+      doc.text(line, 40, doc.y, { width: 515, align: 'left' });
+      doc.moveDown(0.15);
+    });
     
-    // ==================== ПОДПИСИ ====================
-    doc.moveDown(2);
-    doc.fontSize(11);
-    doc.text('_________________________', 40, doc.y, { width: 200 });
-    doc.text('Подпись клиента', 40, doc.y + 15, { width: 200 });
+    doc.moveDown(1.5);
+    doc.font('Normal').fontSize(10);
+    const signY = doc.y;
+    doc.text('_________________________', 40, signY, { width: 200 });
+    doc.text('Подпись клиента', 40, signY + 15, { width: 200 });
     
-    doc.text('_________________________', 350, doc.y, { width: 200 });
-    doc.text('Подпись мастера', 350, doc.y + 15, { width: 200 });
+    doc.text('_________________________', 350, signY, { width: 200 });
+    doc.text('Подпись мастера', 350, signY + 15, { width: 200 });
     
-    // ==================== ФУТЕР ====================
-    doc.fontSize(9).text('Спасибо за обращение!', 40, 770, { align: 'center', width: 515 });
-    
-    // Завершаем PDF
     doc.end();
     
   } catch (error) {
