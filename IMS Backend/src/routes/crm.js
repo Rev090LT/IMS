@@ -14,6 +14,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const FONT_PATH = path.join(__dirname, '../fonts/DejaVuSans.ttf');
 const FONT_BOLD_PATH = path.join(__dirname, '../fonts/DejaVuSans-Bold.ttf');
+const LOGO_PATH = path.join(__dirname, '../images/logo.png'); // 🔥 Путь к логотипу
 
 
 const serviceUpload = multer({
@@ -1502,7 +1503,6 @@ function drawTable(doc, columns, rows, startY) {
   
   return y;
 }
-
 // ============================================================================
 // GET /api/crm/work-orders/:id/pdf — Генерация PDF (ФИНАЛЬНАЯ ВЕРСИЯ)
 // ============================================================================
@@ -1541,24 +1541,20 @@ router.get('/work-orders/:id/pdf', async (req, res) => {
       ORDER BY woi.id
     `, [id]);
     
-    // 🔥 ПРАВИЛЬНЫЙ ФИЛЬТР: исключаем дублирование
-    // Работы = тип 'labor' ИЛИ (есть labor_hours и нет part_id)
+    // 🔥 Правильный фильтр
     const works = items.rows.filter(item => 
       item.item_type === 'labor' || 
       (item.part_id === null && !item.part_number && item.labor_hours !== null)
     );
     
-    // Запчасти = тип 'part' ИЛИ (есть part_id ИЛИ part_number) И НЕ в работах
-    const workIds = new Set(works.map(w => items.rows.indexOf(w)));
-    const parts = items.rows.filter((item, index) => {
-      if (workIds.has(index)) return false; // уже в работах
-      return item.item_type === 'part' || 
-             item.part_id !== null || 
-             item.part_number !== null;
-    });
+    const parts = items.rows.filter(item => 
+      item.item_type === 'part' || 
+      item.part_id !== null || 
+      item.part_number !== null
+    );
     
-    console.log('🔧 Works:', works.length, works.map(w => w.name));
-    console.log('🔩 Parts:', parts.length, parts.map(p => p.name));
+    console.log('🔧 Works:', works.length);
+    console.log('🔩 Parts:', parts.length);
 
     const doc = new PDFDocument({ size: 'A4', margins: { top: 50, bottom: 50, left: 40, right: 40 } });
     
@@ -1568,195 +1564,245 @@ router.get('/work-orders/:id/pdf', async (req, res) => {
     doc.pipe(res);
     doc.registerFont('Normal', FONT_PATH);
     doc.registerFont('Bold', FONT_BOLD_PATH);
-    doc.font('Normal');
     
-    // ==================== ШАПКА ====================
-    doc.font('Bold').fontSize(22).text('ЗАКАЗ-НАРЯД', { align: 'center' });
-    doc.moveDown(0.3);
-    doc.font('Normal').fontSize(14).text(`№ ${order.order_number}`, { align: 'center' });
-    doc.fontSize(11).text(`от ${new Date(order.created_at).toLocaleDateString('ru-RU')}`, { align: 'center' });
-    doc.moveDown(0.8);
+    // ==================== ШАПКА С ЛОГОТИПОМ ====================
+    try {
+      doc.image(LOGO_PATH, 40, 50, { width: 150 });
+    } catch (logoErr) {
+      console.warn('⚠️ Logo not found, skipping');
+    }
+    
+    doc.font('Bold').fontSize(22).text('ЗАКАЗ-НАРЯД', 200, 60);
+    doc.font('Normal').fontSize(14).text(`№ ${order.order_number}`, 200, 90);
+    doc.fontSize(11).text(`от ${new Date(order.created_at).toLocaleDateString('ru-RU')}`, 200, 110);
+    
+    doc.y = 150;
     doc.moveTo(40, doc.y).lineTo(555, doc.y).stroke();
     doc.moveDown(0.5);
     
-    // ==================== КЛИЕНТ И АВТО ====================
-    doc.font('Bold').fontSize(12).text('ИНФОРМАЦИЯ О КЛИЕНТЕ');
+    // ==================== КЛИЕНТ ====================
+    doc.font('Bold').fontSize(12).text('ИНФОРМАЦИЯ О КЛИЕНТЕ', 40, doc.y);
     doc.moveDown(0.2);
     doc.font('Normal').fontSize(10);
-    doc.text(`Клиент: ${order.customer_name || '—'}`);
-    doc.text(`Телефон: ${order.customer_phone || '—'}`);
-    doc.moveDown(0.5);
+    doc.text(`Клиент: ${order.customer_name || '—'}`, 40, doc.y);
+    doc.text(`Телефон: ${order.customer_phone || '—'}`, 40, doc.y + 15);
+    doc.moveDown(1);
     
-    doc.font('Bold').fontSize(12).text('АВТОМОБИЛЬ');
+    // ==================== АВТОМОБИЛЬ ====================
+    doc.font('Bold').fontSize(12).text('АВТОМОБИЛЬ', 40, doc.y);
     doc.moveDown(0.2);
     doc.font('Normal').fontSize(10);
-    doc.text(`Марка: ${order.brand || '—'}`);
-    doc.text(`Модель: ${order.model || '—'}`);
-    doc.text(`VIN: ${order.vin || '—'}`);
-    doc.text(`Год: ${order.year || '—'}`);
-    doc.moveDown(0.5);
+    doc.text(`Марка: ${order.brand || '—'}`, 40, doc.y);
+    doc.text(`Модель: ${order.model || '—'}`, 40, doc.y + 15);
+    doc.text(`VIN: ${order.vin || '—'}`, 40, doc.y + 30);
+    doc.text(`Год: ${order.year || '—'}`, 40, doc.y + 45);
+    doc.moveDown(1.5);
     
     // ==================== ЖАЛОБА ====================
-    doc.font('Bold').fontSize(12).text('ЖАЛОБА КЛИЕНТА');
+    doc.font('Bold').fontSize(12).text('ЖАЛОБА КЛИЕНТА', 40, doc.y);
     doc.moveDown(0.2);
     doc.font('Normal').fontSize(10);
-    doc.text(order.complaint || '—', { align: 'left' }); // 🔥 было justify
-    doc.moveDown(0.5);
+    doc.text(order.complaint || '—', 40, doc.y, { width: 515 });
+    doc.moveDown(0.8);
+    
     doc.moveTo(40, doc.y).lineTo(555, doc.y).stroke();
     doc.moveDown(0.5);
     
+        // ==================== РАБОТЫ ====================
     // ==================== РАБОТЫ ====================
-    doc.font('Bold').fontSize(12).text('ВЫПОЛНЕННЫЕ РАБОТЫ');
+    doc.font('Bold').fontSize(12).text('ВЫПОЛНЕННЫЕ РАБОТЫ', 40, doc.y);
     doc.moveDown(0.3);
     
     if (works.length > 0) {
       const tableX = 40;
-      const tableWidth = 515;
-      const colWidths = [180, 110, 60, 80, 85]; 
+      const colWidths = [200, 100, 60, 75, 80]; // 🔥 Увеличил первую колонку
+      const rowHeight = 18;
+      const headerHeight = 20;
+      const tableTop = doc.y;
       
-      let y = doc.y;
-      doc.rect(tableX, y, tableWidth, 20).fill('#2c3e50');
+      // Заголовок
+      doc.rect(tableX, doc.y, 515, headerHeight).fill('#2c3e50');
       doc.fillColor('white').font('Bold').fontSize(9);
       
-      let x = tableX;
-      const headers = ['Наименование', 'Категория', 'Часы', 'Цена', 'Сумма'];
-      headers.forEach((header, i) => {
-        const align = i >= 2 ? 'right' : 'left';
-        doc.text(header, x + 3, y + 5, { width: colWidths[i] - 6, align });
-        x += colWidths[i];
-      });
+      const headerY = doc.y + 5;
+      doc.text('Наименование', tableX + 5, headerY, { width: colWidths[0] - 10, lineBreak: false, ellipsis: true });
+      doc.text('Категория', tableX + colWidths[0] + 5, headerY, { width: colWidths[1] - 10, lineBreak: false, ellipsis: true });
+      doc.text('Часы', tableX + colWidths[0] + colWidths[1] + 5, headerY, { width: colWidths[2] - 10, align: 'center', lineBreak: false });
+      doc.text('Цена', tableX + colWidths[0] + colWidths[1] + colWidths[2] + 5, headerY, { width: colWidths[3] - 10, align: 'right', lineBreak: false });
+      doc.text('Сумма', tableX + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + 5, headerY, { width: colWidths[4] - 10, align: 'right', lineBreak: false });
       
-      y += 20;
-      doc.fillColor('black').font('Normal').fontSize(9);
+      doc.y += headerHeight;
+      doc.fillColor('black').font('Normal').fontSize(8.5); // 🔥 Уменьшил шрифт для плотности
       
+      // Строки
       works.forEach((work, index) => {
         const total = (work.quantity || 1) * (work.unit_price || 0);
+        const rowY = doc.y;
         
+        // Фон
         if (index % 2 === 0) {
-          doc.rect(tableX, y, tableWidth, 18).fill('#f8f9fa');
+          doc.rect(tableX, rowY, 515, rowHeight).fill('#f8f9fa');
         }
         
         doc.fillColor('black');
-        x = tableX;
         
-        doc.text(work.name || '—', x + 3, y + 4, { width: colWidths[0] - 6 });
-        x += colWidths[0];
+        // 🔥 Все ячейки на одном Y + lineBreak: false + ellipsis
+        doc.text(work.name || '—', tableX + 5, rowY + 4, { 
+          width: colWidths[0] - 10, 
+          lineBreak: false,
+          ellipsis: true 
+        });
         
-        doc.text(work.category || '—', x + 3, y + 4, { width: colWidths[1] - 6 });
-        x += colWidths[1];
+        doc.text(work.category || '—', tableX + colWidths[0] + 5, rowY + 4, { 
+          width: colWidths[1] - 10,
+          lineBreak: false,
+          ellipsis: true
+        });
         
-        doc.text(String(work.labor_hours || '—'), x + 3, y + 4, { width: colWidths[2] - 6, align: 'right' });
-        x += colWidths[2];
+        doc.text(String(work.labor_hours || '—'), tableX + colWidths[0] + colWidths[1] + 5, rowY + 4, { 
+          width: colWidths[2] - 10, 
+          align: 'center',
+          lineBreak: false
+        });
         
-        doc.text(`${(work.unit_price || 0).toLocaleString('ru-RU')} ₽`, x + 3, y + 4, { width: colWidths[3] - 6, align: 'right' });
-        x += colWidths[3];
+        doc.text(`${(work.unit_price || 0).toLocaleString('ru-RU')} ₽`, tableX + colWidths[0] + colWidths[1] + colWidths[2] + 5, rowY + 4, { 
+          width: colWidths[3] - 10, 
+          align: 'right',
+          lineBreak: false
+        });
         
-        doc.text(`${total.toLocaleString('ru-RU')} ₽`, x + 3, y + 4, { width: colWidths[4] - 6, align: 'right' });
+        doc.text(`${total.toLocaleString('ru-RU')} ₽`, tableX + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + 5, rowY + 4, { 
+          width: colWidths[4] - 10, 
+          align: 'right',
+          lineBreak: false
+        });
         
-        y += 18;
+        // 🔥 Фиксированный переход к следующей строке
+        doc.y = rowY + rowHeight;
       });
       
-      doc.rect(tableX, doc.y - (works.length * 18 + 20), tableWidth, works.length * 18 + 20).stroke();
+      // Рамка
+      doc.rect(tableX, tableTop, 515, doc.y - tableTop).stroke();
       
       doc.moveDown(0.3);
       const worksTotal = works.reduce((sum, w) => sum + ((w.quantity || 1) * (w.unit_price || 0)), 0);
-      doc.font('Bold').fontSize(11).text(`Итого по работам: ${worksTotal.toLocaleString('ru-RU')} ₽`, { align: 'right' });
-      doc.moveDown(0.5);
+      doc.font('Bold').fontSize(11).text(`Итого по работам: ${worksTotal.toLocaleString('ru-RU')} ₽`, 40, doc.y, { align: 'right' });
+      doc.moveDown(0.8);
     } else {
-      doc.font('Normal').fontSize(10).text('Работы не выполнялись', { italics: true });
-      doc.moveDown(0.5);
+      doc.font('Normal').fontSize(10).text('Работы не выполнялись', 40, doc.y, { italics: true });
+      doc.moveDown(0.8);
     }
-    
+
     // ==================== ЗАПЧАСТИ ====================
-    doc.font('Bold').fontSize(12).text('ЗАПЧАСТИ');
+    doc.font('Bold').fontSize(12).text('ЗАПЧАСТИ', 40, doc.y);
     doc.moveDown(0.3);
     
     if (parts.length > 0) {
       const tableX = 40;
-      const tableWidth = 515;
-      const colWidths = [130, 80, 80, 60, 80, 85]; 
+      const colWidths = [150, 80, 80, 55, 75, 75]; // 🔥 Сбалансировал ширину
+      const rowHeight = 18;
+      const headerHeight = 20;
+      const tableTop = doc.y;
       
-      let y = doc.y;
-      doc.rect(tableX, y, tableWidth, 20).fill('#2c3e50');
+      // Заголовок
+      doc.rect(tableX, doc.y, 515, headerHeight).fill('#2c3e50');
       doc.fillColor('white').font('Bold').fontSize(9);
       
-      let x = tableX;
-      const headers = ['Наименование', 'Артикул', 'Произв.', 'Кол-во', 'Цена', 'Сумма'];
-      headers.forEach((header, i) => {
-        const align = i >= 3 ? 'right' : 'left';
-        doc.text(header, x + 3, y + 5, { width: colWidths[i] - 6, align });
-        x += colWidths[i];
-      });
+      const headerY = doc.y + 5;
+      doc.text('Наименование', tableX + 5, headerY, { width: colWidths[0] - 10, lineBreak: false, ellipsis: true });
+      doc.text('Артикул', tableX + colWidths[0] + 5, headerY, { width: colWidths[1] - 10, lineBreak: false, ellipsis: true });
+      doc.text('Произв.', tableX + colWidths[0] + colWidths[1] + 5, headerY, { width: colWidths[2] - 10, lineBreak: false, ellipsis: true });
+      doc.text('Кол-во', tableX + colWidths[0] + colWidths[1] + colWidths[2] + 5, headerY, { width: colWidths[3] - 10, align: 'right', lineBreak: false });
+      doc.text('Цена', tableX + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + 5, headerY, { width: colWidths[4] - 10, align: 'right', lineBreak: false });
+      doc.text('Сумма', tableX + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + colWidths[4] + 5, headerY, { width: colWidths[5] - 10, align: 'right', lineBreak: false });
       
-      y += 20;
-      doc.fillColor('black').font('Normal').fontSize(9);
+      doc.y += headerHeight;
+      doc.fillColor('black').font('Normal').fontSize(8.5);
       
+      // Строки
       parts.forEach((part, index) => {
         const total = (part.quantity || 1) * (part.unit_price || 0);
+        const rowY = doc.y;
         
         if (index % 2 === 0) {
-          doc.rect(tableX, y, tableWidth, 18).fill('#f8f9fa');
+          doc.rect(tableX, rowY, 515, rowHeight).fill('#f8f9fa');
         }
         
         doc.fillColor('black');
-        x = tableX;
         
-        doc.text(part.name || '—', x + 3, y + 4, { width: colWidths[0] - 6 });
-        x += colWidths[0];
+        doc.text(part.name || '—', tableX + 5, rowY + 4, { 
+          width: colWidths[0] - 10,
+          lineBreak: false,
+          ellipsis: true
+        });
         
-        doc.text(part.part_number || '—', x + 3, y + 4, { width: colWidths[1] - 6 });
-        x += colWidths[1];
+        doc.text(part.part_number || '—', tableX + colWidths[0] + 5, rowY + 4, { 
+          width: colWidths[1] - 10,
+          lineBreak: false,
+          ellipsis: true
+        });
         
-        doc.text(part.manufacturer || '—', x + 3, y + 4, { width: colWidths[2] - 6 });
-        x += colWidths[2];
+        doc.text(part.manufacturer || '—', tableX + colWidths[0] + colWidths[1] + 5, rowY + 4, { 
+          width: colWidths[2] - 10,
+          lineBreak: false,
+          ellipsis: true
+        });
         
-        doc.text(`${part.quantity || 1} ${part.unit || 'шт'}`, x + 3, y + 4, { width: colWidths[3] - 6, align: 'right' });
-        x += colWidths[3];
+        doc.text(`${part.quantity || 1} ${part.unit || 'шт'}`, tableX + colWidths[0] + colWidths[1] + colWidths[2] + 5, rowY + 4, { 
+          width: colWidths[3] - 10,
+          align: 'right',
+          lineBreak: false
+        });
         
-        doc.text(`${(part.unit_price || 0).toLocaleString('ru-RU')} ₽`, x + 3, y + 4, { width: colWidths[4] - 6, align: 'right' });
-        x += colWidths[4];
+        doc.text(`${(part.unit_price || 0).toLocaleString('ru-RU')} ₽`, tableX + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + 5, rowY + 4, { 
+          width: colWidths[4] - 10,
+          align: 'right',
+          lineBreak: false
+        });
         
-        doc.text(`${total.toLocaleString('ru-RU')} ₽`, x + 3, y + 4, { width: colWidths[5] - 6, align: 'right' });
+        doc.text(`${total.toLocaleString('ru-RU')} ₽`, tableX + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + colWidths[4] + 5, rowY + 4, { 
+          width: colWidths[5] - 10,
+          align: 'right',
+          lineBreak: false
+        });
         
-        y += 18;
+        doc.y = rowY + rowHeight;
       });
       
-      doc.rect(tableX, doc.y - (parts.length * 18 + 20), tableWidth, parts.length * 18 + 20).stroke();
+      // Рамка
+      doc.rect(tableX, tableTop, 515, doc.y - tableTop).stroke();
       
       doc.moveDown(0.3);
       const partsTotal = parts.reduce((sum, p) => sum + ((p.quantity || 1) * (p.unit_price || 0)), 0);
-      doc.font('Bold').fontSize(11).text(`Итого по запчастям: ${partsTotal.toLocaleString('ru-RU')} ₽`, { align: 'right' });
+      doc.font('Bold').fontSize(11).text(`Итого по запчастям: ${partsTotal.toLocaleString('ru-RU')} ₽`, 40, doc.y, { align: 'right' });
       doc.moveDown(0.5);
     } else {
-      doc.font('Normal').fontSize(10).text('Запчасти не устанавливались', { italics: true });
-      doc.moveDown(0.5);
+      doc.font('Normal').fontSize(10).text('Запчасти не устанавливались', 40, doc.y, { italics: true });
+      doc.moveDown(0.8);
     }
-    
     // ==================== ИТОГО ====================
     doc.moveTo(40, doc.y).lineTo(555, doc.y).stroke();
     doc.moveDown(0.3);
     
     const finalTotal = order.final_total || order.total_cost || 0;
-    // 🔥 Используем align: 'right' без justify
-    doc.font('Bold').fontSize(14).text(`ВСЕГО К ОПЛАТЕ: ${finalTotal.toLocaleString('ru-RU')} ₽`, { align: 'right', lineGap: 2 });
+    doc.font('Bold').fontSize(14).text(`ВСЕГО К ОПЛАТЕ: ${finalTotal.toLocaleString('ru-RU')} ₽`, 40, doc.y, { align: 'right' });
 
     // ==================== ГАРАНТИЯ ====================
     doc.moveDown(0.8);
-    doc.font('Bold').fontSize(10).text('ГАРАНТИЙНЫЕ УСЛОВИЯ');
+    doc.font('Bold').fontSize(10).text('ГАРАНТИЙНЫЕ УСЛОВИЯ', 40, doc.y);
     doc.moveDown(0.3);
     doc.font('Normal').fontSize(8);
-
-    // 🔥 Используем align: 'left' вместо justify — текст не будет растягиваться
+    
     const warrantyLines = [
       '1. Гарантия на выполненные работы — 30 календарных дней с момента завершения.',
       '2. Гарантия на установленные запчасти — 90 календарных дней.',
       '3. Гарантия не распространяется на случаи неправильной эксплуатации.',
-      '4. При обнаружении неисправности обращайтесь: +7 (982) 968-07-78',
+      '4. При обнаружении неисправности обращайтесь: +7 (999) 123-45-67',
       '5. Для обращения по гарантии предъявите данный заказ-наряд.'
     ];
     
     warrantyLines.forEach(line => {
-      doc.text(line, 40, doc.y, { width: 515, align: 'left' });
+      doc.text(line, 40, doc.y, { width: 515 });
       doc.moveDown(0.15);
     });
     
@@ -1776,5 +1822,4 @@ router.get('/work-orders/:id/pdf', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-
 export default router;
