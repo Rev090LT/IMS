@@ -28,7 +28,7 @@ import crmRoutes from './routes/crm.js';
 import servicesRoutes from './routes/services.js';
 import customersRoutes from './routes/customers.js';  // ← добавьте
 import usersRoutes from './routes/users.js';          // ← добавьте
-
+import settingsRouter from './routes/settings.js';
 
 const app = express();
 
@@ -90,6 +90,7 @@ app.use('/api/crm', crmRoutes);
 app.use(servicesRoutes);
 app.use('/api/crm/customers', customersRoutes);    // ← добавьте
 app.use('/api/users', usersRoutes);                // ← добавьте
+app.use('/api/settings', settingsRouter);
 // <<<--- Маршрут для получения логов --->
 app.get('/api/node-logs', (req, res) => {
   try {

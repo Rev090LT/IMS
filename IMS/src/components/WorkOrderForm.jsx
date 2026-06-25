@@ -16,6 +16,11 @@ function WorkOrderForm({ token }) {
   const [showServiceSelector, setShowServiceSelector] = useState(false);
   const [showPartsSelector, setShowPartsSelector] = useState(false);
   
+  // 🔥 Состояния для НДС и ставки нормо-часов
+  const [applyNDS, setApplyNDS] = useState(false);
+  const [ndsRate, setNdsRate] = useState(0);
+  const [hourlyRate, setHourlyRate] = useState(1500);
+  
   const [formData, setFormData] = useState({
     customer_id: '',
     vehicle_info: { brand: '', model: '', year: '', vin: '', mileage: '' },
@@ -47,6 +52,35 @@ function WorkOrderForm({ token }) {
     return [];
   };
 
+  // 🔥 Загрузка настроек системы (ставка часа и НДС)
+  const fetchSystemSettings = async () => {
+    try {
+      const response = await fetch('/api/settings', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const settings = data.settings;
+        
+        if (settings.nds_rate) {
+          setNdsRate(settings.nds_rate.value || 0);
+          console.log('💰 НДС из настроек:', settings.nds_rate.value, '%');
+        }
+        
+        if (settings.hourly_rate) {
+          setHourlyRate(settings.hourly_rate.value || 1500);
+          console.log('💰 Ставка часа:', settings.hourly_rate.value, '₽');
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error loading settings:', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchSystemSettings();
+  }, []);
+
   // Загрузка данных
   useEffect(() => {
     const loadData = async () => {
@@ -62,29 +96,31 @@ function WorkOrderForm({ token }) {
         if (mastersRes.ok) setMasters(extractArray(await mastersRes.json(), ['users', 'masters']));
 
         // 🔥 Загружаем данные заказ-наряда при редактировании
-        // В useEffect при загрузке заказ-наряда:
         if (isEditMode && id) {
           console.log('🔍 Loading order for edit:', id);
           const orderRes = await fetch(`/api/crm/work-orders/${id}`, {
             headers: { 'Authorization': `Bearer ${token}` }
           });
           
-          // 🔧 СТАЛО (правильно):
           if (orderRes.ok) {
             const data = await orderRes.json();
             const orderData = data.work_order || data.order || data;
             
-            // 🔥 Читаем work_items и parts_items отдельно (так возвращает бэкенд)
             const worksData = Array.isArray(data.work_items) ? data.work_items : [];
             const partsData = Array.isArray(data.parts_items) ? data.parts_items : [];
             
             console.log('📦 Loaded:', { 
               works: worksData.length, 
               parts: partsData.length,
-              raw: { work_items: data.work_items, parts_items: data.parts_items }
+              apply_nds: orderData.apply_nds
             });
             
             setOrder(orderData);
+            
+            // 🔥 Загружаем состояние НДС
+            if (orderData.apply_nds !== undefined) {
+              setApplyNDS(orderData.apply_nds);
+            }
             
             setFormData({
               customer_id: orderData.customer_id || '',
@@ -100,7 +136,6 @@ function WorkOrderForm({ token }) {
               discount_reason: ''
             });
             
-            // 🔥 Устанавливаем работы и запчасти
             setWorkItems(worksData);
             setPartsItems(partsData);
             
@@ -117,15 +152,13 @@ function WorkOrderForm({ token }) {
     loadData();
   }, [token, id, isEditMode]);
 
-  // 🔧 Загрузка запчастей со склада (используем /api/items из items.js)
-// В useEffect для загрузки запчастей:
+  // 🔧 Загрузка запчастей со склада
   useEffect(() => {
     if (showPartsSelector) {
       console.log('🔍 Opening parts selector, fetching from /api/items...');
       
       const fetchWarehouseParts = async () => {
         try {
-          // 🔥 Используем маршрут из items.js (возвращает массив [...])
           const response = await fetch('/api/items?limit=200', {
             headers: { 'Authorization': `Bearer ${token}` }
           });
@@ -134,7 +167,6 @@ function WorkOrderForm({ token }) {
           
           if (response.ok) {
             const data = await response.json();
-            // 🔥 Ответ из items.js — это массив, не объект
             const partsArray = Array.isArray(data) ? data : (data.items || data.parts || []);
             console.log('📦 Loaded parts:', partsArray.length);
             setWarehouseParts(partsArray);
@@ -166,14 +198,13 @@ function WorkOrderForm({ token }) {
     return { labor: laborTotal, parts: partsTotal, total: laborTotal + partsTotal };
   }, [safeWorkItems, safePartsItems]);
 
-  // 🔧 Расчёт скидки (используем type вместо loyalty_level)
-  const pricing = useMemo(() => {
+  // 🔥 Расчёт итогов с учётом скидки и НДС
+  const pricingWithNDS = useMemo(() => {
     const subtotal = totals.total;
     let discountAmount = 0;
     
     if (formData.discount_type === 'loyalty' && formData.customer_id) {
       const customer = safeCounterparties.find(c => c.id == formData.customer_id);
-      // 🔥 Альтернатива: скидка по типу контрагента
       const loyaltyRates = { 
         individual: 0,
         legal: 5,
@@ -190,15 +221,19 @@ function WorkOrderForm({ token }) {
       discountAmount = Math.min(fixed, subtotal);
     }
     
-    const finalTotal = Math.max(0, subtotal - discountAmount);
+    const afterDiscount = Math.max(0, subtotal - discountAmount);
+    const ndsAmount = applyNDS ? Math.round(afterDiscount * (ndsRate / 100)) : 0;
+    const finalTotal = afterDiscount + ndsAmount;
     
     return {
       subtotal,
       discount: discountAmount,
+      afterDiscount,
+      ndsAmount,
       final: finalTotal,
       discountPercent: subtotal > 0 ? Math.round((discountAmount / subtotal) * 100) : 0
     };
-  }, [totals.total, formData.discount_type, formData.discount_value, formData.customer_id, safeCounterparties]);
+  }, [totals.total, formData.discount_type, formData.discount_value, formData.customer_id, safeCounterparties, applyNDS, ndsRate]);
 
   // Группировка услуг
   const servicesByCategory = useMemo(() => {
@@ -212,8 +247,17 @@ function WorkOrderForm({ token }) {
     return grouped;
   }, [services]);
 
-  // Обработчики для работ
+  // 🔥 Обработчики для работ (с автоподсчётом цены)
   const addWorkItem = (template = {}) => {
+    let unitPrice = template.unit_price || 0;
+    const laborHours = template.labor_hours || 0;
+    
+    // Если цена не указана, но есть нормо-часы — считаем автоматически
+    if (unitPrice === 0 && laborHours > 0) {
+      unitPrice = Math.round(laborHours * hourlyRate);
+      console.log(`✅ Auto-price: ${laborHours}ч × ${hourlyRate}₽ = ${unitPrice}₽`);
+    }
+    
     setWorkItems(prev => [...prev, {
       id: Date.now() + Math.random(),
       service_id: template.service_id || null,
@@ -221,9 +265,9 @@ function WorkOrderForm({ token }) {
       category: template.category || '',
       quantity: template.quantity || 1,
       unit: template.unit || 'усл',
-      unit_price: template.unit_price || 0,
-      labor_hours: template.labor_hours || 0,
-      total_price: template.unit_price || 0,
+      unit_price: unitPrice,
+      labor_hours: laborHours,
+      total_price: (template.quantity || 1) * unitPrice,
       status: 'pending',
       notes: '',
       ...template
@@ -288,7 +332,8 @@ function WorkOrderForm({ token }) {
     try {
       console.log('🔍 Sending payload:', {
         work_items_count: workItems.length,
-        parts_items_count: partsItems.length
+        parts_items_count: partsItems.length,
+        apply_nds: applyNDS
       });
 
       const payload = { 
@@ -309,11 +354,14 @@ function WorkOrderForm({ token }) {
         work_items: Array.isArray(workItems) ? workItems : [],
         parts_items: Array.isArray(partsItems) ? partsItems : [],
         
+        apply_nds: applyNDS,  // 🔥 Передаём флаг НДС
+        
         totals: { 
           ...totals, 
           currency: 'RUB',
-          discount_amount: pricing.discount,
-          final_total: pricing.final
+          discount_amount: pricingWithNDS.discount,
+          nds_amount: pricingWithNDS.ndsAmount,
+          final_total: pricingWithNDS.final
         }
       };
       
@@ -829,28 +877,71 @@ function WorkOrderForm({ token }) {
               />
             </div>
           </div>
-          
-          {pricing.discount > 0 && (
-            <div style={{ 
-              marginTop: '15px', 
-              padding: '12px', 
-              backgroundColor: '#f0fdf4', 
-              borderRadius: '6px',
-              border: '1px solid #27ae60',
+        </Card>
+
+        {/* 🔥 ЧЕКБОКС НДС */}
+        <Card title="💰 НДС">
+          <div style={{
+            backgroundColor: applyNDS ? '#fff3cd' : '#f8f9fa',
+            padding: '15px',
+            borderRadius: '8px',
+            border: applyNDS ? '2px solid #ffc107' : '1px solid #e9ecef',
+            transition: 'all 0.2s'
+          }}>
+            <label style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '10px', 
+              cursor: 'pointer',
               fontSize: '14px'
             }}>
-              <strong>💰 Расчёт:</strong><br/>
-              Сумма работ и запчастей: <strong>{pricing.subtotal.toLocaleString('ru-RU')} ₽</strong><br/>
-              Скидка ({formData.discount_type === 'percent' ? `${formData.discount_value}%` : 
-                      formData.discount_type === 'fixed' ? 'фикс.' : 
-                      formData.discount_type === 'loyalty' ? 'по типу' : '-'}): 
-              <strong style={{ color: '#e74c3c' }}> -{pricing.discount.toLocaleString('ru-RU')} ₽</strong><br/>
-              <hr style={{ margin: '8px 0', border: 'none', borderTop: '1px dashed #27ae60' }}/>
-              <strong>Итого к оплате: <span style={{ color: '#27ae60', fontSize: '18px' }}>
-                {pricing.final.toLocaleString('ru-RU')} ₽
-              </span></strong>
-            </div>
-          )}
+              <input
+                type="checkbox"
+                checked={applyNDS}
+                onChange={(e) => setApplyNDS(e.target.checked)}
+                style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+              />
+              <span style={{ fontWeight: '500' }}>
+                💰 Считать с НДС ({ndsRate}%)
+              </span>
+              {ndsRate === 0 && (
+                <span style={{ marginLeft: '10px', color: '#e74c3c', fontSize: '12px' }}>
+                  ⚠️ Ставка НДС не задана в настройках
+                </span>
+              )}
+            </label>
+            
+            {applyNDS && ndsRate > 0 && (
+              <div style={{ 
+                marginTop: '10px', 
+                padding: '10px', 
+                backgroundColor: 'white',
+                borderRadius: '6px',
+                fontSize: '13px'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
+                  <span>Подитог (после скидки):</span>
+                  <strong>{pricingWithNDS.afterDiscount.toLocaleString('ru-RU')} ₽</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px', color: '#856404' }}>
+                  <span>НДС ({ndsRate}%):</span>
+                  <strong>+{pricingWithNDS.ndsAmount.toLocaleString('ru-RU')} ₽</strong>
+                </div>
+                <div style={{ 
+                  display: 'flex', 
+                  justifyContent: 'space-between',
+                  paddingTop: '5px',
+                  borderTop: '1px solid #eee',
+                  fontSize: '15px'
+                }}>
+                  <span><strong>Итого с НДС:</strong></span>
+                  <strong style={{ color: '#27ae60' }}>
+                    {pricingWithNDS.final.toLocaleString('ru-RU')} ₽
+                  </strong>
+                </div>
+              </div>
+            )}
+          </div>
         </Card>
 
         {/* 💰 Итого */}
@@ -867,18 +958,24 @@ function WorkOrderForm({ token }) {
             <hr style={{ margin: '8px 0', border: 'none', borderTop: '1px solid #eee' }}/>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span>Подытог:</span>
-              <strong>{pricing.subtotal.toLocaleString('ru-RU')} ₽</strong>
+              <strong>{pricingWithNDS.subtotal.toLocaleString('ru-RU')} ₽</strong>
             </div>
-            {pricing.discount > 0 && (
+            {pricingWithNDS.discount > 0 && (
               <div style={{ display: 'flex', justifyContent: 'space-between', color: '#e74c3c' }}>
                 <span>Скидка {formData.discount_reason && `(${formData.discount_reason})`}:</span>
-                <strong>-{pricing.discount.toLocaleString('ru-RU')} ₽</strong>
+                <strong>-{pricingWithNDS.discount.toLocaleString('ru-RU')} ₽</strong>
+              </div>
+            )}
+            {applyNDS && pricingWithNDS.ndsAmount > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#856404' }}>
+                <span>НДС ({ndsRate}%):</span>
+                <strong>+{pricingWithNDS.ndsAmount.toLocaleString('ru-RU')} ₽</strong>
               </div>
             )}
             <hr style={{ margin: '8px 0', border: 'none', borderTop: '2px solid #27ae60' }}/>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '20px', fontWeight: 'bold', color: '#27ae60' }}>
               <span>К оплате:</span>
-              <span>{pricing.final.toLocaleString('ru-RU')} ₽</span>
+              <span>{pricingWithNDS.final.toLocaleString('ru-RU')} ₽</span>
             </div>
           </div>
         </Card>
@@ -904,7 +1001,7 @@ function WorkOrderForm({ token }) {
               service_id: s?.id,
               name: s?.name || '',
               category: s?.category || '',
-              unit_price: s?.base_price || Math.round((s?.labor_hours || 0) * 2500),
+              unit_price: s?.base_price || Math.round((s?.labor_hours || 0) * hourlyRate),
               labor_hours: s?.labor_hours || 0
             }));
             setShowServiceSelector(false);

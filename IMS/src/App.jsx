@@ -22,6 +22,8 @@ import WorkOrderDetail from './components/WorkOrderDetail';
 import WorkOrderForm from './components/WorkOrderForm';
 import CustomerList from './components/CustomerList';
 import CustomerDetail from './components/CustomerDetail';
+import Settings from './components/Settings.jsx';
+
 
 // ============================================================================
 // ROUTE GUARDS (должны быть ДО функции App)
@@ -181,6 +183,7 @@ function App() {
             </PrivateRoute>
           } />
           <Route path="/crm/work-orders/:id/edit" element={<WorkOrderForm token={token} />} />    
+          <Route path="/settings" element={<Settings token={token} />} />
           {/* === REDIRECTS === */}
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />

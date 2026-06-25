@@ -32,14 +32,19 @@ function Sidebar({
     onClose();
   };
 
+  const goToSettings = () => {
+    navigate('/settings');
+    onClose();
+  };
+
   // === СТИЛИ ===
   
   const sidebarStyle = {
     position: 'fixed',
     top: 0,
-    left: isOpen ? 0 : '-100%',  // ← Изменил с -300px на -100% для адаптивности
-    width: '100%',                 // ← Полная ширина
-    maxWidth: '400px',             // ← Но не шире 400px на больших экранах
+    left: isOpen ? 0 : '-100%',
+    width: '100%',
+    maxWidth: '400px',
     height: '100vh',
     background: 'linear-gradient(180deg, #1e3c72 0%, #2a5298 100%)',
     color: 'white',
@@ -94,10 +99,10 @@ function Sidebar({
   const menuLinkStyle = {
     display: 'flex',
     alignItems: 'center',
-    padding: '14px 20px',  // ← Чуть больше отступы для удобства на мобильных
+    padding: '14px 20px',
     color: 'rgba(255,255,255,0.9)',
     textDecoration: 'none',
-    fontSize: '16px',       // ← Чуть крупнее шрифт
+    fontSize: '16px',
     borderRadius: '8px',
     cursor: 'pointer',
     transition: 'all 0.3s ease',
@@ -105,8 +110,8 @@ function Sidebar({
   };
 
   const iconStyle = {
-    marginRight: '15px',    // ← Чуть больше отступ
-    fontSize: '20px',       // ← Крупнее иконки
+    marginRight: '15px',
+    fontSize: '20px',
     width: '24px',
     textAlign: 'center',
   };
@@ -115,7 +120,7 @@ function Sidebar({
     background: 'rgba(255,255,255,0.2)',
     border: 'none',
     color: 'white',
-    width: '40px',          // ← Крупнее кнопка
+    width: '40px',
     height: '40px',
     borderRadius: '50%',
     cursor: 'pointer',
@@ -136,7 +141,6 @@ function Sidebar({
     marginTop: '10px',
   };
 
-  // Стили для календаря в сайдбаре
   const calendarSectionStyle = {
     borderTop: '1px solid rgba(255,255,255,0.1)',
     padding: '15px 20px 20px',
@@ -265,29 +269,6 @@ function Sidebar({
           {isAdmin && (
             <>
               <div style={sectionTitleStyle}>Администрирование</div>
-              
-              <li style={menuItemStyle}>
-                <a
-                  onClick={(e) => {
-                    e.preventDefault();
-                    goToAdminPanel();
-                  }}
-                  style={menuLinkStyle}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = 'rgba(255,255,255,0.15)';
-                    e.currentTarget.style.border = '1px solid rgba(255,255,255,0.2)';
-                    e.currentTarget.style.transform = 'translateX(5px)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = 'transparent';
-                    e.currentTarget.style.border = '1px solid transparent';
-                    e.currentTarget.style.transform = 'translateX(0)';
-                  }}
-                >
-                  <span style={iconStyle}>⚙️</span>
-                  <span>Администрирование</span>
-                </a>
-              </li>
 
               <li style={menuItemStyle}>
                 <a
@@ -311,6 +292,7 @@ function Sidebar({
                   <span>Документооборот</span>
                 </a>
               </li>
+
               <li style={menuItemStyle}>
                 <a
                   onClick={(e) => {
@@ -332,6 +314,30 @@ function Sidebar({
                 >
                   <span style={iconStyle}>🚗</span>
                   <span>Автомобили в разборе</span>
+                </a>
+              </li>
+
+              {/* 🔥 НОВЫЙ ПУНКТ: Настройки системы */}
+              <li style={menuItemStyle}>
+                <a
+                  onClick={(e) => {
+                    e.preventDefault();
+                    goToSettings();
+                  }}
+                  style={menuLinkStyle}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'rgba(255,255,255,0.15)';
+                    e.currentTarget.style.border = '1px solid rgba(255,255,255,0.2)';
+                    e.currentTarget.style.transform = 'translateX(5px)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'transparent';
+                    e.currentTarget.style.border = '1px solid transparent';
+                    e.currentTarget.style.transform = 'translateX(0)';
+                  }}
+                >
+                  <span style={iconStyle}>🔧</span>
+                  <span>Настройки системы</span>
                 </a>
               </li>
             </>
@@ -358,7 +364,6 @@ function Sidebar({
 
       {/* CSS для адаптивности */}
       <style>{`
-        /* Сайдбар на мобильных - во всю ширину */
         @media (max-width: 768px) {
           .sidebar {
             width: 100% !important;
@@ -390,7 +395,6 @@ function Sidebar({
           }
         }
         
-        /* Сайдбар на планшетах */
         @media (min-width: 769px) and (max-width: 1200px) {
           .sidebar {
             width: 85% !important;
@@ -398,7 +402,6 @@ function Sidebar({
           }
         }
         
-        /* Сайдбар на десктопе - узкий */
         @media (min-width: 1201px) {
           .sidebar {
             width: 280px !important;
@@ -409,7 +412,6 @@ function Sidebar({
           }
         }
         
-        /* Анимация появления */
         @keyframes slideIn {
           from {
             opacity: 0;
@@ -430,6 +432,7 @@ function Sidebar({
         .sidebar.open .menu-item:nth-child(3) { animation-delay: 0.15s; }
         .sidebar.open .menu-item:nth-child(4) { animation-delay: 0.2s; }
         .sidebar.open .menu-item:nth-child(5) { animation-delay: 0.25s; }
+        .sidebar.open .menu-item:nth-child(6) { animation-delay: 0.3s; }
       `}</style>
     </>
   );

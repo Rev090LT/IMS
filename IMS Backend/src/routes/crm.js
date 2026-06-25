@@ -14,8 +14,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const FONT_PATH = path.join(__dirname, '../fonts/DejaVuSans.ttf');
 const FONT_BOLD_PATH = path.join(__dirname, '../fonts/DejaVuSans-Bold.ttf');
-const LOGO_PATH = path.join(__dirname, '../images/logo.png'); // 🔥 Путь к логотипу
-
+const LOGO_PATH = path.join(__dirname, '../images/logo.png');
 
 const serviceUpload = multer({
   storage: multer.diskStorage({
@@ -39,16 +38,10 @@ const serviceUpload = multer({
 // ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
 
 async function resolveServiceId(value) {
-  // Пустое значение
   if (!value) return null;
-  
-  // Уже число
   if (typeof value === 'number') return value;
-  
-  // Строка, которая является числом
   if (!isNaN(parseInt(value))) return parseInt(value);
   
-  // Строка-код или название услуги — ищем в БД
   try {
     const result = await pool.query(
       `SELECT id FROM services 
@@ -62,6 +55,97 @@ async function resolveServiceId(value) {
     return null;
   }
 }
+
+async function getHourlyRate() {
+  try {
+    const result = await pool.query(`
+      SELECT setting_value FROM system_settings 
+      WHERE setting_key = 'hourly_rate' AND is_active = TRUE
+    `);
+    return result.rows[0] ? parseFloat(result.rows[0].setting_value) : 1500;
+  } catch (e) {
+    console.warn('⚠️ Could not fetch hourly_rate, using default 1500');
+    return 1500;
+  }
+}
+
+async function getNDSRate() {
+  try {
+    const result = await pool.query(`
+      SELECT setting_value FROM system_settings 
+      WHERE setting_key = 'nds_rate' AND is_active = TRUE
+    `);
+    return result.rows[0] ? parseFloat(result.rows[0].setting_value) : 0;
+  } catch (e) {
+    console.warn('⚠️ Could not fetch nds_rate, using default 0');
+    return 0;
+  }
+}
+
+async function getSystemSettings() {
+  try {
+    const result = await pool.query(`
+      SELECT setting_key, setting_value, setting_type 
+      FROM system_settings 
+      WHERE is_active = TRUE
+    `);
+    
+    const settings = {};
+    result.rows.forEach(row => {
+      let value = row.setting_value;
+      
+      if (row.setting_type === 'number') {
+        value = parseFloat(value);
+      } else if (row.setting_type === 'boolean') {
+        value = value === 'true';
+      }
+      
+      settings[row.setting_key] = value;
+    });
+    
+    return settings;
+  } catch (e) {
+    console.warn('⚠️ Could not fetch system settings, using defaults');
+    return {
+      hourly_rate: 1500,
+      nds_rate: 0,
+      warranty_work_days: 30,
+      warranty_parts_days: 90,
+      company_name: 'TrackTime Performance',
+      company_phone: '+7 (999) 123-45-67',
+      currency_symbol: '₽'
+    };
+  }
+}
+
+function formatPhone(phone) {
+  if (!phone) return '—';
+  
+  // Убираем всё кроме цифр
+  const digits = String(phone).replace(/\D/g, '');
+  
+  // Российский формат
+  if (digits.length === 11 && (digits.startsWith('7') || digits.startsWith('8'))) {
+    return `+7 (${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7, 9)}-${digits.slice(9, 11)}`;
+  }
+  
+  if (digits.length === 10) {
+    return `+7 (${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6, 8)}-${digits.slice(8, 10)}`;
+  }
+  
+  // Если не подходит под формат — возвращаем как есть
+  return phone;
+}
+
+function calculateWorkPrice(laborHours, hourlyRate) {
+  return Math.round((parseFloat(laborHours) || 0) * (parseFloat(hourlyRate) || 0));
+}
+
+function calculateNDS(subtotal, ndsRate) {
+  if (!ndsRate || ndsRate <= 0) return 0;
+  return Math.round(subtotal * (ndsRate / 100));
+}
+
 // ==================== УСЛУГИ ====================
 
 router.post('/services/import', serviceUpload.single('file'), async (req, res) => {
@@ -404,7 +488,6 @@ router.get('/counterparties', async (req, res) => {
 
 // ==================== ЗАКАЗ-НАРЯДЫ ====================
 
-// 🔥 Главный фикс: чистый запрос БЕЗ комментариев внутри SELECT
 router.get('/work-orders/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -439,6 +522,9 @@ router.get('/work-orders/:id', async (req, res) => {
         wo.assigned_master,
         wo.assigned_bay,
         wo.master_id,
+        wo.apply_nds,
+        wo.nds_amount,
+        wo.nds_rate,
         COALESCE(cp.company_name, cp.fio) AS customer_name,
         cp.phone AS customer_phone,
         COALESCE(wo.vehicle_info->>'brand', v.brand) AS brand,
@@ -488,9 +574,7 @@ router.get('/work-orders/:id', async (req, res) => {
     `, [workOrderId]);
     
     console.log('✅ Found items:', items.rows.length);
-    console.log('📋 Raw items:', items.rows); // ← ДОБАВЬ ЭТО ДЛЯ ОТЛАДКИ
     
-    // 🔥 РАЗДЕЛЕНИЕ ПО item_type
     const works = items.rows.filter(item => item.item_type === 'labor');
     const parts = items.rows.filter(item => item.item_type === 'part');
     
@@ -498,6 +582,7 @@ router.get('/work-orders/:id', async (req, res) => {
       works: works.length, 
       parts: parts.length 
     });
+    
     let history = { rows: [] };
     try {
       history = await pool.query(`
@@ -510,7 +595,6 @@ router.get('/work-orders/:id', async (req, res) => {
       console.warn('⚠️ work_order_status_history not available');
     }
     
-    // 🔥 Возвращаем work_items и parts_items отдельно
     res.json({
       work_order: wo.rows[0],
       work_items: works,
@@ -625,18 +709,18 @@ router.post('/work-orders', async (req, res) => {
     const { 
       customer_id, vehicle_id, vehicle_info, complaint, notes, priority,
       assigned_master, assigned_bay, promised_at, status,
-      discount_type, discount_value, discount_reason
+      discount_type, discount_value, discount_reason,
+      apply_nds
     } = req.body;
     
     const workItems = Array.isArray(req.body.work_items) ? req.body.work_items : [];
     const partsItems = Array.isArray(req.body.parts_items) ? req.body.parts_items : [];
-    const totals = req.body.totals || {};
     
-    console.log('🔍 POST /work-orders payload:', {
-      customer_id, vehicle_id,
-      work_items_count: workItems.length,
-      parts_items_count: partsItems.length
-    });
+    const HOURLY_RATE = await getHourlyRate();
+    const NDS_RATE = apply_nds ? await getNDSRate() : 0;
+    
+    console.log('💰 Hourly rate:', HOURLY_RATE, '₽/час');
+    console.log('💰 NDS rate:', NDS_RATE, '%');
     
     const orderNumber = `WO-${Date.now().toString().slice(-6)}`;
     
@@ -645,7 +729,7 @@ router.post('/work-orders', async (req, res) => {
         order_number, customer_id, vehicle_id, vehicle_info, complaint, notes,
         priority, assigned_master, assigned_bay, promised_at, status,
         discount_type, discount_value, discount_reason,
-        final_total, total_cost, created_at, updated_at
+        apply_nds, nds_rate, created_at, updated_at
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW(), NOW())
       RETURNING id, order_number, created_at
     `, [
@@ -654,12 +738,15 @@ router.post('/work-orders', async (req, res) => {
       complaint || '', notes || '', priority || 'normal',
       assigned_master || null, assigned_bay || null, promised_at || null,
       status || 'draft', discount_type || 'none', discount_value || 0, discount_reason || '',
-      totals.final_total || totals.total || 0, totals.total || 0
+      apply_nds || false, NDS_RATE
     ]);
     
     const workOrderId = orderResult.rows[0].id;
     console.log('✅ Created work_order:', workOrderId);
 
+    let subtotal = 0;
+
+    // 🔧 Сохранение работ (БЕЗ total_price — он генерируется БД)
     if (workItems.length > 0) {
       console.log('🔧 Saving work_items:', workItems.length);
       
@@ -673,6 +760,17 @@ router.post('/work-orders', async (req, res) => {
           }
         }
         
+        let unitPrice = parseFloat(item.unit_price) || 0;
+        let laborHours = parseFloat(item.labor_hours) || 0;
+        
+        if (unitPrice === 0 && laborHours > 0) {
+          unitPrice = calculateWorkPrice(laborHours, HOURLY_RATE);
+          console.log(`✅ Auto-calculated: ${laborHours}ч × ${HOURLY_RATE}₽ = ${unitPrice}₽`);
+        }
+        
+        const total = (parseFloat(item.quantity) || 1) * unitPrice;
+        subtotal += total;
+        
         await client.query(`
           INSERT INTO work_order_items (
             work_order_id, item_type, service_id, name, category, quantity, unit,
@@ -685,30 +783,32 @@ router.post('/work-orders', async (req, res) => {
           item.category || '',
           parseFloat(item.quantity) || 1, 
           item.unit || 'усл',
-          parseFloat(item.unit_price) || 0, 
-          parseFloat(item.labor_hours) || 0,
+          unitPrice,
+          laborHours,
           item.status || 'pending', 
           item.notes || ''
         ]);
       }
     }
     
-    // 🔧 Сохранение запчастей
+    // 🔧 Сохранение запчастей (БЕЗ total_price)
     if (partsItems.length > 0) {
       console.log('🔧 Saving parts_items:', partsItems.length);
       
       for (const item of partsItems) {
         const partId = item.part_id || item.item_id;
+        const unitPrice = parseFloat(item.unit_price) || 0;
+        const quantity = parseInt(item.quantity) || 1;
+        const total = quantity * unitPrice;
+        subtotal += total;
         
-        // 🔥 Если есть part_id, уменьшаем количество на складе
         if (partId) {
           await client.query(`
             UPDATE items 
             SET quantity = quantity - $1 
             WHERE id = $2 AND quantity >= $1
-          `, [parseInt(item.quantity) || 1, partId]);
+          `, [quantity, partId]);
           
-          // 🔥 Создаём запись в sold_parts
           await client.query(`
             INSERT INTO sold_parts (
               item_id, item_name, part_number, quantity, 
@@ -723,9 +823,9 @@ router.post('/work-orders', async (req, res) => {
             partId,
             item.name || '',
             item.part_number || item.article || '',
-            parseInt(item.quantity) || 1,
-            parseFloat(item.unit_price) || 0,
-            null // counterparty_id можно взять из work_orders.customer_id
+            quantity,
+            unitPrice,
+            customer_id || null
           ]);
         }
         
@@ -739,9 +839,9 @@ router.post('/work-orders', async (req, res) => {
           partId || null, 
           item.name || '', 
           item.category || '',
-          parseInt(item.quantity) || 1, 
+          quantity, 
           item.unit || 'шт',
-          parseFloat(item.unit_price) || 0,
+          unitPrice,
           item.part_number || item.article || '', 
           item.manufacturer || '',
           item.status || 'pending'
@@ -750,12 +850,27 @@ router.post('/work-orders', async (req, res) => {
       console.log('✅ Saved parts_items');
     }
     
+    const ndsAmount = calculateNDS(subtotal, NDS_RATE);
+    const finalTotal = subtotal + ndsAmount;
+    
+    await client.query(`
+      UPDATE work_orders SET
+        total_cost = $1,
+        final_total = $2,
+        nds_amount = $3
+      WHERE id = $4
+    `, [subtotal, finalTotal, ndsAmount, workOrderId]);
+    
     await client.query('COMMIT');
+    
+    console.log(`✅ Work order created: #${orderResult.rows[0].order_number}`);
+    console.log(`💰 Subtotal: ${subtotal}₽, NDS: ${ndsAmount}₽, Total: ${finalTotal}₽`);
     
     res.status(201).json({
       success: true,
       message: 'Заказ-наряд успешно создан',
-      work_order: orderResult.rows[0]
+      work_order: orderResult.rows[0],
+      totals: { subtotal, ndsAmount, finalTotal }
     });
     
   } catch (error) {
@@ -795,19 +910,18 @@ router.put('/work-orders/:id/status', async (req, res) => {
   }
 });
 
+// 🔧 ИСПРАВЛЕНО: убран total_price из INSERT
 router.post('/work-orders/:id/items', async (req, res) => {
   try {
     const { id } = req.params;
     const { item_type, service_id, part_id, quantity, labor_hours, unit_price, comment } = req.body;
     
-    const totalPrice = (labor_hours || 0) * (unit_price || 0) + (part_id ? (quantity || 1) * (unit_price || 0) : 0);
-    
     const result = await pool.query(`
       INSERT INTO work_order_items (work_order_id, item_type, service_id, part_id,
-                                    quantity, labor_hours, unit_price, total_price, comment)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                                    quantity, labor_hours, unit_price, comment)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING *
-    `, [id, item_type, service_id, part_id, quantity || 1, labor_hours, unit_price, totalPrice, comment]);
+    `, [id, item_type, service_id, part_id, quantity || 1, labor_hours, unit_price, comment]);
     
     await pool.query(`
       UPDATE work_orders SET 
@@ -848,6 +962,7 @@ router.delete('/work-orders/:id/items/:item_id', async (req, res) => {
   }
 });
 
+// 🔧 ИСПРАВЛЕНО: убран total_price из INSERT и SELECT
 router.post('/work-orders/:id/clone', async (req, res) => {
   try {
     const { id } = req.params;
@@ -872,10 +987,11 @@ router.post('/work-orders/:id/clone', async (req, res) => {
         null, orig.assigned_master, orig.assigned_bay, orig.vehicle_info
       ]);
       
+      // 🔥 Убрали total_price — БД сама посчитает
       await pool.query(`
         INSERT INTO work_order_items (work_order_id, item_type, service_id, part_id,
-                                      quantity, labor_hours, unit_price, total_price, comment)
-        SELECT $1, item_type, service_id, part_id, quantity, labor_hours, unit_price, total_price, comment
+                                      quantity, labor_hours, unit_price, comment)
+        SELECT $1, item_type, service_id, part_id, quantity, labor_hours, unit_price, comment
         FROM work_order_items WHERE work_order_id = $2
       `, [newWo.rows[0].id, id]);
       
@@ -962,6 +1078,7 @@ router.post('/service-templates', async (req, res) => {
   }
 });
 
+// 🔧 ИСПРАВЛЕНО: убран total_price из INSERT
 router.post('/work-orders/from-template/:template_id', async (req, res) => {
   try {
     const { template_id } = req.params;
@@ -991,11 +1108,11 @@ router.post('/work-orders/from-template/:template_id', async (req, res) => {
       `, [orderNumber, customer_id, vehicle_id, complaint, notes, promised_at, {}]);
       
       for (const item of items.rows) {
-        const totalPrice = (item.labor_hours * (item.quantity_override || 1)) * (item.base_price || 0);
+        // 🔥 Убрали total_price — БД сама посчитает
         await pool.query(`
-          INSERT INTO work_order_items (work_order_id, item_type, service_id, quantity, labor_hours, unit_price, total_price)
-          VALUES ($1, 'labor', $2, $3, $4, $5, $6)
-        `, [wo.rows[0].id, item.id, item.quantity_override || 1, item.labor_hours, item.base_price, totalPrice]);
+          INSERT INTO work_order_items (work_order_id, item_type, service_id, quantity, labor_hours, unit_price)
+          VALUES ($1, 'labor', $2, $3, $4, $5)
+        `, [wo.rows[0].id, item.id, item.quantity_override || 1, item.labor_hours, item.base_price]);
       }
       
       await pool.query('COMMIT');
@@ -1136,7 +1253,7 @@ router.get('/reports/customers-ltv', async (req, res) => {
 });
 
 // ============================================================================
-// PUT /api/crm/work-orders/:id — Обновление заказ-наряда (ИСПРАВЛЕННЫЙ)
+// PUT /api/crm/work-orders/:id — 🔧 ИСПРАВЛЕНО: убран total_price из INSERT
 // ============================================================================
 router.put('/work-orders/:id', async (req, res) => {
   const client = await pool.connect();
@@ -1149,29 +1266,27 @@ router.put('/work-orders/:id', async (req, res) => {
       customer_id, vehicle_id, vehicle_info, complaint, notes,
       assigned_master, assigned_bay, promised_at, status,
       discount_type, discount_value, discount_reason,
-      work_items, parts_items, totals
+      work_items, parts_items, apply_nds
     } = req.body;
     
-    console.log('🔍 PUT /work-orders/:id payload:', { 
-      id, 
-      work_items_count: work_items?.length, 
-      parts_items_count: parts_items?.length 
-    });
+    const HOURLY_RATE = await getHourlyRate();
+    const NDS_RATE = apply_nds ? await getNDSRate() : 0;
     
-    // 1. Проверка существования
+    console.log('💰 Hourly rate:', HOURLY_RATE, '₽/час');
+    console.log('💰 NDS rate:', NDS_RATE, '%');
+    
     const check = await client.query('SELECT id, order_number FROM work_orders WHERE id = $1', [id]);
     if (check.rows.length === 0) {
       await client.query('ROLLBACK');
       return res.status(404).json({ error: 'Заказ-наряд не найден' });
     }
     
-    // 2. Обновление основного заказ-наряда
     await client.query(`
       UPDATE work_orders SET
         customer_id = $1, vehicle_id = $2, vehicle_info = $3, complaint = $4, notes = $5,
         assigned_master = $6, assigned_bay = $7, promised_at = $8, status = $9,
         discount_type = $10, discount_value = $11, discount_reason = $12,
-        final_total = $13, total_cost = $14, updated_at = NOW()
+        apply_nds = $13, nds_rate = $14, updated_at = NOW()
       WHERE id = $15
     `, [
       customer_id || null, vehicle_id || null,
@@ -1179,28 +1294,35 @@ router.put('/work-orders/:id', async (req, res) => {
       complaint || '', notes || '', assigned_master || null, assigned_bay || null,
       promised_at || null, status || 'draft', discount_type || 'none',
       discount_value || 0, discount_reason || '',
-      totals?.final_total || totals?.total || 0, totals?.total || 0, id
+      apply_nds || false, NDS_RATE, id
     ]);
     
     console.log('✅ Updated work_order base data');
     
-    // 3. 🔥 ПОЛНОЕ удаление старых элементов (работ + запчастей)
-    await client.query('DELETE FROM work_order_items WHERE work_order_id = $1', [id]);
-    console.log('️ Cleared old work_order_items');
+    // 🔥 Восстанавливаем старые запчасти на склад
+    const oldParts = await client.query(`
+      SELECT part_id, quantity FROM work_order_items 
+      WHERE work_order_id = $1 AND item_type = 'part' AND part_id IS NOT NULL
+    `, [id]);
     
-    // 4. Вставка новых работ
-if (Array.isArray(work_items)) {
+    for (const oldPart of oldParts.rows) {
+      await client.query(`
+        UPDATE items 
+        SET quantity = quantity + $1 
+        WHERE id = $2
+      `, [parseInt(oldPart.quantity) || 1, oldPart.part_id]);
+    }
+    
+    await client.query('DELETE FROM work_order_items WHERE work_order_id = $1', [id]);
+    console.log('🗑️ Cleared old work_order_items');
+    
+    let subtotal = 0;
+    
+    // 🔧 Вставка новых работ (БЕЗ total_price — БД сама считает)
+    if (Array.isArray(work_items)) {
       console.log('🔧 Updating work_items:', work_items.length);
       
-      // Удаляем старые работы
-      await client.query(
-        `DELETE FROM work_order_items 
-         WHERE work_order_id = $1 AND item_type = 'labor'`, 
-        [id]
-      );
-      
       for (const item of work_items) {
-        // 🔥 Ключевой момент: резолвим service_id
         let serviceId = null;
         
         if (item.service_id) {
@@ -1210,6 +1332,17 @@ if (Array.isArray(work_items)) {
           }
         }
         
+        let unitPrice = parseFloat(item.unit_price) || 0;
+        let laborHours = parseFloat(item.labor_hours) || 0;
+        
+        if (unitPrice === 0 && laborHours > 0) {
+          unitPrice = calculateWorkPrice(laborHours, HOURLY_RATE);
+          console.log(`✅ Auto-calculated: ${laborHours}ч × ${HOURLY_RATE}₽ = ${unitPrice}₽`);
+        }
+        
+        // subtotal считаем для расчёта НДС
+        subtotal += (parseFloat(item.quantity) || 1) * unitPrice;
+        
         await client.query(`
           INSERT INTO work_order_items (
             work_order_id, item_type, service_id, name, category, quantity, unit,
@@ -1217,13 +1350,13 @@ if (Array.isArray(work_items)) {
           ) VALUES ($1, 'labor', $2, $3, $4, $5, $6, $7, $8, $9, $10)
         `, [
           id, 
-          serviceId,  // ← Здесь будет число или null
+          serviceId,
           item.name || '', 
           item.category || '',
           parseFloat(item.quantity) || 1, 
           item.unit || 'усл',
-          parseFloat(item.unit_price) || 0, 
-          parseFloat(item.labor_hours) || 0,
+          unitPrice,
+          laborHours,
           item.status || 'pending', 
           item.notes || ''
         ]);
@@ -1231,56 +1364,23 @@ if (Array.isArray(work_items)) {
       console.log('✅ Updated work_items');
     }
     
-    // 5. Вставка новых запчастей
+    // 🔧 Вставка новых запчастей (БЕЗ total_price)
     if (Array.isArray(parts_items)) {
       console.log('🔧 Updating parts_items:', parts_items.length);
       
-      // Сначала получаем старые запчасти для восстановления количества
-      const oldParts = await client.query(`
-        SELECT part_id, quantity FROM work_order_items 
-        WHERE work_order_id = $1 AND item_type = 'part'
-      `, [id]);
-      
-      // Восстанавливаем старое количество на складе
-      for (const oldPart of oldParts.rows) {
-        if (oldPart.part_id) {
-          await client.query(`
-            UPDATE items 
-            SET quantity = quantity + $1 
-            WHERE id = $2
-          `, [parseInt(oldPart.quantity) || 1, oldPart.part_id]);
-        }
-      }
-      
-      // Удаляем старые записи о продаже
-      await client.query(`
-        DELETE FROM sold_parts 
-        WHERE item_id IN (
-          SELECT part_id FROM work_order_items 
-          WHERE work_order_id = $1 AND item_type = 'part'
-        )
-      `, [id]);
-      
-      // Удаляем старые запчасти из заказ-наряда
-      await client.query(
-        `DELETE FROM work_order_items 
-         WHERE work_order_id = $1 AND item_type = 'part'`, 
-        [id]
-      );
-      
-      // Вставляем новые запчасти
       for (const item of parts_items) {
         const partId = item.part_id || item.item_id;
+        const unitPrice = parseFloat(item.unit_price) || 0;
+        const quantity = parseInt(item.quantity) || 1;
+        subtotal += quantity * unitPrice;
         
         if (partId) {
-          // Уменьшаем количество на складе
           await client.query(`
             UPDATE items 
             SET quantity = quantity - $1 
             WHERE id = $2 AND quantity >= $1
-          `, [parseInt(item.quantity) || 1, partId]);
+          `, [quantity, partId]);
           
-          // Создаём запись о продаже
           await client.query(`
             INSERT INTO sold_parts (
               item_id, item_name, part_number, quantity, 
@@ -1290,8 +1390,8 @@ if (Array.isArray(work_items)) {
             partId,
             item.name || '',
             item.part_number || item.article || '',
-            parseInt(item.quantity) || 1,
-            parseFloat(item.unit_price) || 0
+            quantity,
+            unitPrice
           ]);
         }
         
@@ -1305,9 +1405,9 @@ if (Array.isArray(work_items)) {
           partId || null, 
           item.name || '', 
           item.category || '',
-          parseInt(item.quantity) || 1, 
+          quantity, 
           item.unit || 'шт',
-          parseFloat(item.unit_price) || 0,
+          unitPrice,
           item.part_number || item.article || '', 
           item.manufacturer || '',
           item.status || 'pending'
@@ -1316,9 +1416,27 @@ if (Array.isArray(work_items)) {
       console.log('✅ Updated parts_items');
     }
     
+    const ndsAmount = calculateNDS(subtotal, NDS_RATE);
+    const finalTotal = subtotal + ndsAmount;
+    
+    await client.query(`
+      UPDATE work_orders SET
+        total_cost = $1,
+        final_total = $2,
+        nds_amount = $3
+      WHERE id = $4
+    `, [subtotal, finalTotal, ndsAmount, id]);
+    
     await client.query('COMMIT');
     console.log('✅ Work order updated successfully');
-    res.json({ success: true, message: 'Заказ-наряд обновлён', work_order: { id } });
+    console.log(`💰 Subtotal: ${subtotal}₽, NDS: ${ndsAmount}₽, Total: ${finalTotal}₽`);
+    
+    res.json({ 
+      success: true, 
+      message: 'Заказ-наряд обновлён', 
+      work_order: { id },
+      totals: { subtotal, ndsAmount, finalTotal }
+    });
     
   } catch (error) {
     await client.query('ROLLBACK');
@@ -1422,21 +1540,20 @@ router.get('/dashboard/quick-stats', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
 function drawTable(doc, columns, rows, startY) {
-  const pageWidth = 595; // A4
+  const pageWidth = 595;
   const margin = 40;
   const tableWidth = pageWidth - 2 * margin;
   const rowHeight = 22;
   const headerHeight = 25;
   
-  // Рассчитываем ширину колонок
   const totalWidth = columns.reduce((sum, col) => sum + col.width, 0);
   const scale = tableWidth / totalWidth;
   
   let x = margin;
   let y = startY;
   
-  // 🔹 Рисуем заголовок
   doc.rect(margin, y, tableWidth, headerHeight).fill('#2c3e50');
   doc.fillColor('white').fontSize(10).font(path.join(__dirname, '../fonts/DejaVuSans-Bold.ttf'));
   
@@ -1444,25 +1561,18 @@ function drawTable(doc, columns, rows, startY) {
   columns.forEach(col => {
     const colWidth = col.width * scale;
     if (col.align === 'right') {
-      doc.text(col.title, colX + 5, y + 6, { 
-        width: colWidth - 10, 
-        align: 'right' 
-      });
+      doc.text(col.title, colX + 5, y + 6, { width: colWidth - 10, align: 'right' });
     } else {
-      doc.text(col.title, colX + 5, y + 6, { 
-        width: colWidth - 10 
-      });
+      doc.text(col.title, colX + 5, y + 6, { width: colWidth - 10 });
     }
     colX += colWidth;
   });
   
   y += headerHeight;
   
-  // 🔹 Рисуем строки
   doc.font(path.join(__dirname, '../fonts/DejaVuSans.ttf')).fontSize(10);
   
   rows.forEach((row, index) => {
-    // Чередование цветов
     if (index % 2 === 0) {
       doc.rect(margin, y, tableWidth, rowHeight).fill('#f8f9fa');
     } else {
@@ -1477,46 +1587,61 @@ function drawTable(doc, columns, rows, startY) {
       const cellValue = row[colIndex] !== undefined ? row[colIndex] : '';
       
       if (col.align === 'right') {
-        doc.text(String(cellValue), colX + 5, y + 5, { 
-          width: colWidth - 10, 
-          align: 'right' 
-        });
+        doc.text(String(cellValue), colX + 5, y + 5, { width: colWidth - 10, align: 'right' });
       } else {
-        doc.text(String(cellValue), colX + 5, y + 5, { 
-          width: colWidth - 10 
-        });
+        doc.text(String(cellValue), colX + 5, y + 5, { width: colWidth - 10 });
       }
       colX += colWidth;
     });
     
     y += rowHeight;
     
-    // Новая страница если нужно
     if (y > 750) {
       doc.addPage();
       y = 50;
     }
   });
   
-  // 🔹 Рамка таблицы
   doc.rect(margin, startY, tableWidth, y - startY).stroke();
   
   return y;
 }
+
 // ============================================================================
-// GET /api/crm/work-orders/:id/pdf — Генерация PDF (ФИНАЛЬНАЯ ВЕРСИЯ)
+// GET /api/crm/work-orders/:id/pdf — Генерация PDF
 // ============================================================================
 router.get('/work-orders/:id/pdf', async (req, res) => {
   try {
     const { id } = req.params;
+    
+    // 🔥 Загружаем настройки системы ОДИН раз
+    const SETTINGS = await getSystemSettings();
+    const CURRENCY = SETTINGS.currency_symbol || '₽';
+    const COMPANY_NAME = SETTINGS.company_name || 'TrackTime Performance';
+    const COMPANY_PHONE = SETTINGS.company_phone || '+7 (999) 123-45-67';
+    const WARRANTY_WORK = SETTINGS.warranty_work_days || 30;
+    const WARRANTY_PARTS = SETTINGS.warranty_parts_days || 90;
+    
+    console.log('⚙️ Using settings:', {
+      company: COMPANY_NAME,
+      phone: COMPANY_PHONE,
+      warranty_work: WARRANTY_WORK,
+      warranty_parts: WARRANTY_PARTS,
+      currency: CURRENCY
+    });
     
     const wo = await pool.query(`
       SELECT 
         wo.id, wo.order_number, wo.complaint, wo.notes,
         wo.vehicle_info, wo.final_total, wo.total_cost,
         wo.created_at,
+        wo.apply_nds, wo.nds_amount, wo.nds_rate,
         COALESCE(cp.company_name, cp.fio) AS customer_name,
-        cp.phone AS customer_phone,
+        -- 🔥 Исправлено: берём телефон из phone, если пусто - из fio
+        CASE 
+          WHEN cp.phone ~ '^[0-9+\-\s\(\)]+$' THEN cp.phone
+          ELSE '—'
+        END AS customer_phone,
         COALESCE(wo.vehicle_info->>'brand', v.brand) AS brand,
         COALESCE(wo.vehicle_info->>'model', v.model) AS model,
         COALESCE(wo.vehicle_info->>'vin', v.vin) AS vin,
@@ -1541,7 +1666,6 @@ router.get('/work-orders/:id/pdf', async (req, res) => {
       ORDER BY woi.id
     `, [id]);
     
-    // 🔥 Правильный фильтр
     const works = items.rows.filter(item => 
       item.item_type === 'labor' || 
       (item.part_id === null && !item.part_number && item.labor_hours !== null)
@@ -1566,149 +1690,138 @@ router.get('/work-orders/:id/pdf', async (req, res) => {
     doc.registerFont('Bold', FONT_BOLD_PATH);
     
     // ==================== ШАПКА С ЛОГОТИПОМ ====================
+    // 🔥 Логотип в верхнем левом углу
     try {
       doc.image(LOGO_PATH, 40, 50, { width: 150 });
     } catch (logoErr) {
       console.warn('⚠️ Logo not found, skipping');
     }
     
+    // 🔥 Заголовок справа от логотипа (по центру страницы)
     doc.font('Bold').fontSize(22).text('ЗАКАЗ-НАРЯД', 200, 60);
     doc.font('Normal').fontSize(14).text(`№ ${order.order_number}`, 200, 90);
     doc.fontSize(11).text(`от ${new Date(order.created_at).toLocaleDateString('ru-RU')}`, 200, 110);
     
+    // 🔥 Сдвигаем курсор ниже логотипа
     doc.y = 150;
     doc.moveTo(40, doc.y).lineTo(555, doc.y).stroke();
-    doc.moveDown(0.5);
+    doc.moveDown(0.3);  // 🔥 Уменьшил отступ с 0.5 до 0.3
     
-    // ==================== КЛИЕНТ ====================
-    doc.font('Bold').fontSize(12).text('ИНФОРМАЦИЯ О КЛИЕНТЕ', 40, doc.y);
-    doc.moveDown(0.2);
+     // ==================== КЛИЕНТ ====================
+    let currentY = 165;  // 🔥 Фиксированная координата Y
+    
+    doc.font('Bold').fontSize(12).text('ИНФОРМАЦИЯ О КЛИЕНТЕ', 40, currentY);
+    currentY += 18;
+    const customerPhone = formatPhone(order.customer_phone);
+
     doc.font('Normal').fontSize(10);
-    doc.text(`Клиент: ${order.customer_name || '—'}`, 40, doc.y);
-    doc.text(`Телефон: ${order.customer_phone || '—'}`, 40, doc.y + 15);
-    doc.moveDown(1);
+    doc.text(`Клиент: ${order.customer_name || '—'}`, 40, currentY);
+    currentY += 15;
+    
+    doc.text(`Телефон: ${order.customer_phone || '—'}`, 40, currentY);
+    currentY += 20;  //  Отступ до следующего блока
     
     // ==================== АВТОМОБИЛЬ ====================
-    doc.font('Bold').fontSize(12).text('АВТОМОБИЛЬ', 40, doc.y);
-    doc.moveDown(0.2);
+    doc.font('Bold').fontSize(12).text('АВТОМОБИЛЬ', 40, currentY);
+    currentY += 18;
+    
     doc.font('Normal').fontSize(10);
-    doc.text(`Марка: ${order.brand || '—'}`, 40, doc.y);
-    doc.text(`Модель: ${order.model || '—'}`, 40, doc.y + 15);
-    doc.text(`VIN: ${order.vin || '—'}`, 40, doc.y + 30);
-    doc.text(`Год: ${order.year || '—'}`, 40, doc.y + 45);
-    doc.moveDown(1.5);
+    doc.text(`Марка: ${order.brand || '—'}`, 40, currentY);
+    currentY += 15;
+    
+    doc.text(`Модель: ${order.model || '—'}`, 40, currentY);
+    currentY += 15;
+    
+    doc.text(`VIN: ${order.vin || '—'}`, 40, currentY);
+    currentY += 15;
+    
+    doc.text(`Год: ${order.year || '—'}`, 40, currentY);
+    currentY += 20;  // 🔥 Отступ до следующего блока
     
     // ==================== ЖАЛОБА ====================
-    doc.font('Bold').fontSize(12).text('ЖАЛОБА КЛИЕНТА', 40, doc.y);
-    doc.moveDown(0.2);
+    doc.font('Bold').fontSize(12).text('ЖАЛОБА КЛИЕНТА', 40, currentY);
+    currentY += 18;
+    
     doc.font('Normal').fontSize(10);
-    doc.text(order.complaint || '—', 40, doc.y, { width: 515 });
-    doc.moveDown(0.8);
+    doc.text(order.complaint || '—', 40, currentY, { width: 515 });
+    currentY += 25;  // 🔥 Отступ до следующего блока
     
-    doc.moveTo(40, doc.y).lineTo(555, doc.y).stroke();
-    doc.moveDown(0.5);
+    // Разделительная линия
+    doc.moveTo(40, currentY).lineTo(555, currentY).stroke();
+    currentY += 15;
     
-        // ==================== РАБОТЫ ====================
     // ==================== РАБОТЫ ====================
-    doc.font('Bold').fontSize(12).text('ВЫПОЛНЕННЫЕ РАБОТЫ', 40, doc.y);
-    doc.moveDown(0.3);
+    doc.font('Bold').fontSize(12).text('ВЫПОЛНЕННЫЕ РАБОТЫ', 40, currentY);
+    currentY += 15;
     
     if (works.length > 0) {
       const tableX = 40;
-      const colWidths = [200, 100, 60, 75, 80]; // 🔥 Увеличил первую колонку
+      const colWidths = [200, 100, 60, 75, 80];
       const rowHeight = 18;
       const headerHeight = 20;
-      const tableTop = doc.y;
+      const tableTop = currentY;
       
-      // Заголовок
-      doc.rect(tableX, doc.y, 515, headerHeight).fill('#2c3e50');
+      // Заголовок таблицы
+      doc.rect(tableX, currentY, 515, headerHeight).fill('#2c3e50');
       doc.fillColor('white').font('Bold').fontSize(9);
       
-      const headerY = doc.y + 5;
+      const headerY = currentY + 5;
       doc.text('Наименование', tableX + 5, headerY, { width: colWidths[0] - 10, lineBreak: false, ellipsis: true });
       doc.text('Категория', tableX + colWidths[0] + 5, headerY, { width: colWidths[1] - 10, lineBreak: false, ellipsis: true });
       doc.text('Часы', tableX + colWidths[0] + colWidths[1] + 5, headerY, { width: colWidths[2] - 10, align: 'center', lineBreak: false });
       doc.text('Цена', tableX + colWidths[0] + colWidths[1] + colWidths[2] + 5, headerY, { width: colWidths[3] - 10, align: 'right', lineBreak: false });
       doc.text('Сумма', tableX + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + 5, headerY, { width: colWidths[4] - 10, align: 'right', lineBreak: false });
       
-      doc.y += headerHeight;
-      doc.fillColor('black').font('Normal').fontSize(8.5); // 🔥 Уменьшил шрифт для плотности
+      currentY += headerHeight;
+      doc.fillColor('black').font('Normal').fontSize(8.5);
       
-      // Строки
+      // Строки таблицы
       works.forEach((work, index) => {
         const total = (work.quantity || 1) * (work.unit_price || 0);
-        const rowY = doc.y;
+        const rowY = currentY;
         
-        // Фон
         if (index % 2 === 0) {
           doc.rect(tableX, rowY, 515, rowHeight).fill('#f8f9fa');
         }
         
         doc.fillColor('black');
         
-        // 🔥 Все ячейки на одном Y + lineBreak: false + ellipsis
-        doc.text(work.name || '—', tableX + 5, rowY + 4, { 
-          width: colWidths[0] - 10, 
-          lineBreak: false,
-          ellipsis: true 
-        });
+        doc.text(work.name || '—', tableX + 5, rowY + 4, { width: colWidths[0] - 10, lineBreak: false, ellipsis: true });
+        doc.text(work.category || '—', tableX + colWidths[0] + 5, rowY + 4, { width: colWidths[1] - 10, lineBreak: false, ellipsis: true });
+        doc.text(String(work.labor_hours || '—'), tableX + colWidths[0] + colWidths[1] + 5, rowY + 4, { width: colWidths[2] - 10, align: 'center', lineBreak: false });
+        doc.text(`${(work.unit_price || 0).toLocaleString('ru-RU')} ₽`, tableX + colWidths[0] + colWidths[1] + colWidths[2] + 5, rowY + 4, { width: colWidths[3] - 10, align: 'right', lineBreak: false });
+        doc.text(`${total.toLocaleString('ru-RU')} ₽`, tableX + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + 5, rowY + 4, { width: colWidths[4] - 10, align: 'right', lineBreak: false });
         
-        doc.text(work.category || '—', tableX + colWidths[0] + 5, rowY + 4, { 
-          width: colWidths[1] - 10,
-          lineBreak: false,
-          ellipsis: true
-        });
-        
-        doc.text(String(work.labor_hours || '—'), tableX + colWidths[0] + colWidths[1] + 5, rowY + 4, { 
-          width: colWidths[2] - 10, 
-          align: 'center',
-          lineBreak: false
-        });
-        
-        doc.text(`${(work.unit_price || 0).toLocaleString('ru-RU')} ₽`, tableX + colWidths[0] + colWidths[1] + colWidths[2] + 5, rowY + 4, { 
-          width: colWidths[3] - 10, 
-          align: 'right',
-          lineBreak: false
-        });
-        
-        doc.text(`${total.toLocaleString('ru-RU')} ₽`, tableX + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + 5, rowY + 4, { 
-          width: colWidths[4] - 10, 
-          align: 'right',
-          lineBreak: false
-        });
-        
-        // 🔥 Фиксированный переход к следующей строке
-        doc.y = rowY + rowHeight;
+        currentY = rowY + rowHeight;
       });
       
-      // Рамка
-      doc.rect(tableX, tableTop, 515, doc.y - tableTop).stroke();
+      // Рамка таблицы
+      doc.rect(tableX, tableTop, 515, currentY - tableTop).stroke();
       
-      doc.moveDown(0.3);
+      currentY += 10;
       const worksTotal = works.reduce((sum, w) => sum + ((w.quantity || 1) * (w.unit_price || 0)), 0);
-      doc.font('Bold').fontSize(11).text(`Итого по работам: ${worksTotal.toLocaleString('ru-RU')} ₽`, 40, doc.y, { align: 'right' });
-      doc.moveDown(0.8);
+      doc.font('Bold').fontSize(11).text(`Итого по работам: ${worksTotal.toLocaleString('ru-RU')} ₽`, 40, currentY, { align: 'right' });
+      currentY += 20;
     } else {
-      doc.font('Normal').fontSize(10).text('Работы не выполнялись', 40, doc.y, { italics: true });
-      doc.moveDown(0.8);
+      doc.font('Normal').fontSize(10).text('Работы не выполнялись', 40, currentY, { italics: true });
+      currentY += 20;
     }
 
     // ==================== ЗАПЧАСТИ ====================
-    doc.font('Bold').fontSize(12).text('ЗАПЧАСТИ', 40, doc.y);
-    doc.moveDown(0.3);
+    doc.font('Bold').fontSize(12).text('ЗАПЧАСТИ', 40, currentY);
+    currentY += 15;
     
     if (parts.length > 0) {
       const tableX = 40;
-      const colWidths = [150, 80, 80, 55, 75, 75]; // 🔥 Сбалансировал ширину
+      const colWidths = [150, 80, 80, 55, 75, 75];
       const rowHeight = 18;
       const headerHeight = 20;
-      const tableTop = doc.y;
+      const tableTop = currentY;
       
-      // Заголовок
-      doc.rect(tableX, doc.y, 515, headerHeight).fill('#2c3e50');
+      doc.rect(tableX, currentY, 515, headerHeight).fill('#2c3e50');
       doc.fillColor('white').font('Bold').fontSize(9);
       
-      const headerY = doc.y + 5;
+      const headerY = currentY + 5;
       doc.text('Наименование', tableX + 5, headerY, { width: colWidths[0] - 10, lineBreak: false, ellipsis: true });
       doc.text('Артикул', tableX + colWidths[0] + 5, headerY, { width: colWidths[1] - 10, lineBreak: false, ellipsis: true });
       doc.text('Произв.', tableX + colWidths[0] + colWidths[1] + 5, headerY, { width: colWidths[2] - 10, lineBreak: false, ellipsis: true });
@@ -1716,13 +1829,12 @@ router.get('/work-orders/:id/pdf', async (req, res) => {
       doc.text('Цена', tableX + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + 5, headerY, { width: colWidths[4] - 10, align: 'right', lineBreak: false });
       doc.text('Сумма', tableX + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + colWidths[4] + 5, headerY, { width: colWidths[5] - 10, align: 'right', lineBreak: false });
       
-      doc.y += headerHeight;
+      currentY += headerHeight;
       doc.fillColor('black').font('Normal').fontSize(8.5);
       
-      // Строки
       parts.forEach((part, index) => {
         const total = (part.quantity || 1) * (part.unit_price || 0);
-        const rowY = doc.y;
+        const rowY = currentY;
         
         if (index % 2 === 0) {
           doc.rect(tableX, rowY, 515, rowHeight).fill('#f8f9fa');
@@ -1730,96 +1842,128 @@ router.get('/work-orders/:id/pdf', async (req, res) => {
         
         doc.fillColor('black');
         
-        doc.text(part.name || '—', tableX + 5, rowY + 4, { 
-          width: colWidths[0] - 10,
-          lineBreak: false,
-          ellipsis: true
-        });
+        doc.text(part.name || '—', tableX + 5, rowY + 4, { width: colWidths[0] - 10, lineBreak: false, ellipsis: true });
+        doc.text(part.part_number || '—', tableX + colWidths[0] + 5, rowY + 4, { width: colWidths[1] - 10, lineBreak: false, ellipsis: true });
+        doc.text(part.manufacturer || '—', tableX + colWidths[0] + colWidths[1] + 5, rowY + 4, { width: colWidths[2] - 10, lineBreak: false, ellipsis: true });
+        doc.text(`${part.quantity || 1} ${part.unit || 'шт'}`, tableX + colWidths[0] + colWidths[1] + colWidths[2] + 5, rowY + 4, { width: colWidths[3] - 10, align: 'right', lineBreak: false });
+        doc.text(`${(part.unit_price || 0).toLocaleString('ru-RU')} ₽`, tableX + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + 5, rowY + 4, { width: colWidths[4] - 10, align: 'right', lineBreak: false });
+        doc.text(`${total.toLocaleString('ru-RU')} ₽`, tableX + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + colWidths[4] + 5, rowY + 4, { width: colWidths[5] - 10, align: 'right', lineBreak: false });
         
-        doc.text(part.part_number || '—', tableX + colWidths[0] + 5, rowY + 4, { 
-          width: colWidths[1] - 10,
-          lineBreak: false,
-          ellipsis: true
-        });
-        
-        doc.text(part.manufacturer || '—', tableX + colWidths[0] + colWidths[1] + 5, rowY + 4, { 
-          width: colWidths[2] - 10,
-          lineBreak: false,
-          ellipsis: true
-        });
-        
-        doc.text(`${part.quantity || 1} ${part.unit || 'шт'}`, tableX + colWidths[0] + colWidths[1] + colWidths[2] + 5, rowY + 4, { 
-          width: colWidths[3] - 10,
-          align: 'right',
-          lineBreak: false
-        });
-        
-        doc.text(`${(part.unit_price || 0).toLocaleString('ru-RU')} ₽`, tableX + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + 5, rowY + 4, { 
-          width: colWidths[4] - 10,
-          align: 'right',
-          lineBreak: false
-        });
-        
-        doc.text(`${total.toLocaleString('ru-RU')} ₽`, tableX + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + colWidths[4] + 5, rowY + 4, { 
-          width: colWidths[5] - 10,
-          align: 'right',
-          lineBreak: false
-        });
-        
-        doc.y = rowY + rowHeight;
+        currentY = rowY + rowHeight;
       });
       
-      // Рамка
-      doc.rect(tableX, tableTop, 515, doc.y - tableTop).stroke();
+      doc.rect(tableX, tableTop, 515, currentY - tableTop).stroke();
       
-      doc.moveDown(0.3);
+      currentY += 10;
       const partsTotal = parts.reduce((sum, p) => sum + ((p.quantity || 1) * (p.unit_price || 0)), 0);
-      doc.font('Bold').fontSize(11).text(`Итого по запчастям: ${partsTotal.toLocaleString('ru-RU')} ₽`, 40, doc.y, { align: 'right' });
-      doc.moveDown(0.5);
+      doc.font('Bold').fontSize(11).text(`Итого по запчастям: ${partsTotal.toLocaleString('ru-RU')} ₽`, 40, currentY, { align: 'right' });
+      currentY += 20;
     } else {
-      doc.font('Normal').fontSize(10).text('Запчасти не устанавливались', 40, doc.y, { italics: true });
-      doc.moveDown(0.8);
+      doc.font('Normal').fontSize(10).text('Запчасти не устанавливались', 40, currentY, { italics: true });
+      currentY += 20;
     }
-    // ==================== ИТОГО ====================
-    doc.moveTo(40, doc.y).lineTo(555, doc.y).stroke();
-    doc.moveDown(0.3);
     
-    const finalTotal = order.final_total || order.total_cost || 0;
-    doc.font('Bold').fontSize(14).text(`ВСЕГО К ОПЛАТЕ: ${finalTotal.toLocaleString('ru-RU')} ₽`, 40, doc.y, { align: 'right' });
+    // ==================== ИТОГО С НДС ====================
+    doc.moveTo(40, currentY).lineTo(555, currentY).stroke();
+    currentY += 15;
+    
+    const subtotal = order.total_cost || 0;
+    const ndsAmount = order.nds_amount || 0;
+    const finalTotal = order.final_total || subtotal;
+    
+    if (order.apply_nds && ndsAmount > 0) {
+      doc.font('Normal').fontSize(11).text(
+        `Подитог: ${subtotal.toLocaleString('ru-RU')} ₽`, 
+        40, currentY, { align: 'right' }
+      );
+      currentY += 15;
+      
+      doc.font('Normal').fontSize(11).text(
+        `НДС (${order.nds_rate || 0}%): +${ndsAmount.toLocaleString('ru-RU')} ₽`, 
+        40, currentY, { align: 'right' }
+      );
+      currentY += 15;
+    }
+    
+    doc.font('Bold').fontSize(14).text(`ВСЕГО К ОПЛАТЕ: ${finalTotal.toLocaleString('ru-RU')} ₽`, 40, currentY, { align: 'right' });
+    currentY += 25;
 
     // ==================== ГАРАНТИЯ ====================
-    doc.moveDown(0.8);
-    doc.font('Bold').fontSize(10).text('ГАРАНТИЙНЫЕ УСЛОВИЯ', 40, doc.y);
-    doc.moveDown(0.3);
+    doc.font('Bold').fontSize(10).text('ГАРАНТИЙНЫЕ УСЛОВИЯ', 40, currentY);
+    currentY += 18;
+    
     doc.font('Normal').fontSize(8);
     
+    // 🔥 Форматируем телефон компании
+    const companyPhone = formatPhone(SETTINGS.company_phone || '+7 (999) 123-45-67');
+    
+    // ==================== ГАРАНТИЯ ====================
+    // 🔥 Проверяем, хватает ли места на странице
+    const warrantyBlockHeight = 100; // Примерная высота блока гарантии
+    if (currentY + warrantyBlockHeight > 750) {
+      doc.addPage();
+      currentY = 50;
+    }
+    
+    doc.font('Bold').fontSize(10).text('ГАРАНТИЙНЫЕ УСЛОВИЯ', 40, currentY);
+    currentY += 18;
+    
+    doc.font('Normal').fontSize(8);
+    
+    // 🔥 Форматируем телефон компании
+    const servicePhone = formatPhone(SETTINGS.company_phone || '+7 (999) 123-45-67');
+    
     const warrantyLines = [
-      '1. Гарантия на выполненные работы — 30 календарных дней с момента завершения.',
-      '2. Гарантия на установленные запчасти — 90 календарных дней.',
+      `1. Гарантия на выполненные работы — ${SETTINGS.warranty_work_days || 30} календарных дней с момента завершения.`,
+      `2. Гарантия на установленные запчасти — ${SETTINGS.warranty_parts_days || 90} календарных дней.`,
       '3. Гарантия не распространяется на случаи неправильной эксплуатации.',
-      '4. При обнаружении неисправности обращайтесь: +7 (999) 123-45-67',
+      `4. При обнаружении неисправности обращайтесь: ${servicePhone}`,
       '5. Для обращения по гарантии предъявите данный заказ-наряд.'
     ];
     
+    // 🔥 Рендерим все строки гарантии
     warrantyLines.forEach(line => {
-      doc.text(line, 40, doc.y, { width: 515 });
-      doc.moveDown(0.15);
+      // Проверяем, не вышли ли за пределы страницы
+      if (currentY > 750) {
+        doc.addPage();
+        currentY = 50;
+      }
+      
+      doc.text(line, 40, currentY, { 
+        width: 475,
+        align: 'left'
+      });
+      currentY += 14;
     });
     
-    doc.moveDown(1.5);
+    currentY += 15;
     doc.font('Normal').fontSize(10);
-    const signY = doc.y;
-    doc.text('_________________________', 40, signY, { width: 200 });
-    doc.text('Подпись клиента', 40, signY + 15, { width: 200 });
     
-    doc.text('_________________________', 350, signY, { width: 200 });
-    doc.text('Подпись мастера', 350, signY + 15, { width: 200 });
+    // Проверяем место для подписей
+    if (currentY + 50 > 750) {
+      doc.addPage();
+      currentY = 50;
+    }
+    
+    doc.text('_________________________', 40, currentY, { width: 200 });
+    doc.text('Подпись клиента', 40, currentY + 15, { width: 200 });
+    
+    doc.text('_________________________', 350, currentY, { width: 200 });
+    doc.text('Подпись мастера', 350, currentY + 15, { width: 200 });
     
     doc.end();
     
   } catch (error) {
     console.error('❌ Error generating PDF:', error);
+    
+    // 🔥 Если ответ уже отправлен — не пытаемся писать снова
+    if (res.headersSent) {
+      console.warn('⚠️ Response already sent, cannot send error');
+      return;
+    }
+    
     res.status(500).json({ error: error.message });
   }
 });
+
 export default router;

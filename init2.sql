@@ -50,7 +50,39 @@ CREATE TABLE IF NOT EXISTS pending_users (
     created_at TIMESTAMP DEFAULT NOW(),
     approved BOOLEAN DEFAULT FALSE
 );
+CREATE TABLE IF NOT EXISTS system_settings (
+    id SERIAL PRIMARY KEY,
+    setting_key VARCHAR(100) NOT NULL UNIQUE,
+    setting_value TEXT NOT NULL,
+    setting_type VARCHAR(50) DEFAULT 'string', -- string, number, boolean, json
+    category VARCHAR(100) DEFAULT 'general', -- general, billing, notifications, etc.
+    description TEXT,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
 
+-- Индекс для быстрого поиска
+CREATE INDEX idx_settings_key ON system_settings(setting_key);
+CREATE INDEX idx_settings_category ON system_settings(category);
+
+-- ============================================================================
+-- Начальные настройки
+-- ============================================================================
+
+INSERT INTO system_settings (setting_key, setting_value, setting_type, category, description) VALUES
+('hourly_rate', '1500', 'number', 'billing', 'Ставка за час работы слесаря (₽)'),
+('warranty_work_days', '30', 'number', 'billing', 'Гарантия на работы (дней)'),
+('warranty_parts_days', '90', 'number', 'billing', 'Гарантия на запчасти (дней)'),
+('company_phone', '+7 (999) 123-45-67', 'string', 'general', 'Контактный телефон компании'),
+('company_name', 'TrackTime Performance', 'string', 'general', 'Название компании'),
+('currency_symbol', '₽', 'string', 'billing', 'Символ валюты'),
+('tax_rate', '0', 'number', 'billing', 'Налоговая ставка (%)'),
+('discount_enabled', 'true', 'boolean', 'billing', 'Разрешить скидки'),
+('auto_backup_enabled', 'false', 'boolean', 'system', 'Автоматическое резервное копирование'),
+('debug_mode', 'false', 'boolean', 'system', 'Режим отладки');
+
+COMMENT ON TABLE system_settings IS 'Централизованное хранилище настроек системы';
 -- 2.2 Справочники (категории, производители, локации)
 -- ----------------------------------------------------------------------------
 
