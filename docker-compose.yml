@@ -1,21 +1,34 @@
+version: '3.8'
+
 services:
   db:
     image: postgres:15-alpine
+    container_name: ims_postgres
     environment:
       POSTGRES_DB: inventory_db
       POSTGRES_USER: inventory_user
       POSTGRES_PASSWORD: Knightrider2005
     volumes:
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
-      - postgres_data:/var/lib/postgresql/data  
+      - ./init.sql:/docker-entrypoint-initdb.d/init2.sql
+      - postgres_data:/var/lib/postgresql/data
+      - ./pg_backup:/var/lib/postgresql/backup  
     ports:
-      - "5432:5432"
+      - "5432:5432"  
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U inventory_user -d inventory_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   backend:
-    build: ./IMS Backend
+    build: 
+      context: ./IMS Backend
+      dockerfile: Dockerfile
+    container_name: ims_backend
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     environment:
       DATABASE_URL: postgresql://inventory_user:Knightrider2005@db:5432/inventory_db
       JWT_SECRET: mysupersecrehjsdjhktkeyforjsonwebtoken12345!@#
@@ -23,16 +36,28 @@ services:
     ports:
       - "3000:3000"
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health", "||",  "exit 1"] 
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   frontend:
-    build: ./IMS
+    build: 
+      context: ./IMS
+      dockerfile: Dockerfile
+    container_name: ims_frontend
     depends_on:
       - backend
     ports:
       - "80:80"
     environment:
-      - VITE_API_URL=http://localhost:3000
+      - VITE_API_URL=/api
     restart: unless-stopped
 
 volumes:
-  postgres_data:  
+  postgres_data:
+    driver: local
+  pg_backup:
+    driver: local

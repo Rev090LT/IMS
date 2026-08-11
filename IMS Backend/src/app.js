@@ -17,6 +17,18 @@ import suppliersRouter from './routes/suppliers.js';
 import soldPartsRouter from './routes/sold-parts.js';
 import incomeSummaryRouter from './routes/income-summary.js';
 import addUserRouter from './routes/add-user.js';
+import photosRoutes from './routes/photos.js';
+import logsRoutes from './routes/logs.js';
+import { httpLogger } from './utils/logger.js';
+import appointmentsRoutes from './routes/appointments.js';
+import carsRoutes from './routes/cars.js';  // ← Должно быть
+import { upload } from './middleware/upload.js';
+import platformsRoutes from './routes/platforms.js';
+import crmRoutes from './routes/crm.js';
+import servicesRoutes from './routes/services.js';
+import customersRoutes from './routes/customers.js';  // ← добавьте
+import usersRoutes from './routes/users.js';          // ← добавьте
+import settingsRouter from './routes/settings.js';
 
 const app = express();
 
@@ -41,8 +53,18 @@ app.use(helmet());
 app.use(cors({
   origin: ['http://localhost:5173', 'http://localhost:3000'],
   credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
+
+app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
+  setHeaders: (res, path) => {
+    // Добавляем CORS заголовки для изображений
+    res.setHeader('Access-Control-Allow-Origin', 'http://localhost:5173');
+    res.setHeader('Access-Control-Allow-Methods', 'GET');
+  }
+}));
+
 app.use(express.json());
 
 app.use('/api/auth', authRoutes);
@@ -51,13 +73,24 @@ app.use('/api/locations', locationsRoutes);
 app.use('/api/sql', sqlRoutes);
 app.use('/api/movements', movementsRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/cars', carsRoutes);  
 app.use('/api/lookup', lookupRoutes);
 app.use('/api/counterparties', counterpartiesRouter);
 app.use('/api/suppliers', suppliersRouter);
 app.use('/api/sold-parts', soldPartsRouter);
 app.use('/api/income-summary', incomeSummaryRouter);
 app.use('/api/add-user', addUserRouter);
-
+app.use('/api/photos', photosRoutes);
+app.use('/uploads', express.static('uploads'));
+app.use(httpLogger); // Логирование всех HTTP запросов
+app.use('/api/logs', logsRoutes);
+app.use('/api/appointments', appointmentsRoutes);
+app.use('/api/platforms', platformsRoutes);
+app.use('/api/crm', crmRoutes);
+app.use(servicesRoutes);
+app.use('/api/crm/customers', customersRoutes);    // ← добавьте
+app.use('/api/users', usersRoutes);                // ← добавьте
+app.use('/api/settings', settingsRouter);
 // <<<--- Маршрут для получения логов --->
 app.get('/api/node-logs', (req, res) => {
   try {
