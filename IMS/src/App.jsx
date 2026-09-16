@@ -23,6 +23,7 @@ import WorkOrderForm from './components/WorkOrderForm';
 import CustomerList from './components/CustomerList';
 import CustomerDetail from './components/CustomerDetail';
 import Settings from './components/Settings.jsx';
+import InDevelopment from './components/InDevelopment.jsx';
 
 
 // ============================================================================
@@ -147,7 +148,7 @@ function App() {
 
           <Route path="/platforms" element={
             <PrivateRoute>
-              <PlatformsPage token={token} />
+              <InDevelopment token={token} />
             </PrivateRoute>
           } />
 
@@ -174,7 +175,7 @@ function App() {
           } />
           <Route path="/crm/customers" element={
             <PrivateRoute>
-              <CustomerList token={token} />
+              <InDevelopment token={token} />
             </PrivateRoute>
           } />
           <Route path="/crm/customers/:id" element={
