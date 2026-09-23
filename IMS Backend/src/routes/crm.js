@@ -486,6 +486,47 @@ router.get('/counterparties', async (req, res) => {
   }
 });
 
+// ============================================================================
+// POST /api/crm/counterparties — Создание нового контрагента (Клиента)
+// ============================================================================
+router.post('/counterparties', async (req, res) => {
+  try {
+    const { fio, company_name, phone, email, inn, kpp, type } = req.body;
+
+    // Валидация: телефон обязателен
+    if (!phone || phone.trim() === '') {
+      return res.status(400).json({ error: 'Телефон обязателен для заполнения' });
+    }
+
+    const result = await pool.query(`
+      INSERT INTO counterparties (
+        fio, company_name, phone, email, inn, kpp, type, created_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+      RETURNING id, fio, company_name, phone, email, inn, kpp, type, created_at
+    `, [
+      fio || null, 
+      company_name || null, 
+      phone.trim(), 
+      email || null, 
+      inn || null, 
+      kpp || null, 
+      type || 'individual'
+    ]);
+
+    console.log('✅ Новый контрагент создан:', result.rows[0].fio || result.rows[0].company_name);
+
+    res.status(201).json({
+      success: true,
+      message: 'Клиент успешно создан',
+      counterparty: result.rows[0]
+    });
+    
+  } catch (error) {
+    console.error('❌ Error creating counterparty:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ==================== ЗАКАЗ-НАРЯДЫ ====================
 
 router.get('/work-orders/:id', async (req, res) => {
@@ -499,6 +540,7 @@ router.get('/work-orders/:id', async (req, res) => {
     
     console.log('🔍 GET /work-orders/:id - fetching order:', workOrderId);
 
+    // 🔥 Запрос 1: Получаем данные заказ-наряда
     const wo = await pool.query(`
       SELECT 
         wo.id,
@@ -531,7 +573,7 @@ router.get('/work-orders/:id', async (req, res) => {
         COALESCE(wo.vehicle_info->>'model', v.model) AS model,
         COALESCE(wo.vehicle_info->>'vin', v.vin) AS vin,
         COALESCE(wo.vehicle_info->>'year', v.year::text) AS year,
-        COALESCE(wo.vehicle_info->>'license_plate', v.license_plate) AS license_plate
+        wo.vehicle_info->>'license_plate' AS license_plate
       FROM work_orders wo
       LEFT JOIN counterparties cp ON wo.customer_id = cp.id
       LEFT JOIN cars v ON wo.vehicle_id = v.id
@@ -545,6 +587,7 @@ router.get('/work-orders/:id', async (req, res) => {
     
     console.log('🔧 Fetching work_order_items for order:', workOrderId);
     
+    // 🔥 Запрос 2: Получаем элементы заказ-наряда (работы и запчасти) с use_fixed_rate TI GEI SEMEN
     const items = await pool.query(`
       SELECT 
         woi.id,
@@ -559,6 +602,7 @@ router.get('/work-orders/:id', async (req, res) => {
         woi.unit_price,
         woi.total_price,
         woi.labor_hours,
+        woi.use_fixed_rate,
         woi.status,
         woi.notes,
         woi.part_number,
@@ -575,14 +619,16 @@ router.get('/work-orders/:id', async (req, res) => {
     
     console.log('✅ Found items:', items.rows.length);
     
+    // Разделяем на работы и запчасти
     const works = items.rows.filter(item => item.item_type === 'labor');
     const parts = items.rows.filter(item => item.item_type === 'part');
     
-    console.log('📊 Separated:', { 
+    console.log(' Separated:', { 
       works: works.length, 
       parts: parts.length 
     });
     
+    // Получаем историю статусов (если таблица существует)
     let history = { rows: [] };
     try {
       history = await pool.query(`
@@ -595,9 +641,15 @@ router.get('/work-orders/:id', async (req, res) => {
       console.warn('⚠️ work_order_status_history not available');
     }
     
+    // 🔥 КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: Нормализуем boolean из PostgreSQL ('t'/'f'/null) в настоящий JS boolean
+    const normalizedWorks = works.map(item => ({
+      ...item,
+      use_fixed_rate: item.use_fixed_rate === true || item.use_fixed_rate === 't'
+    }));
+    
     res.json({
       work_order: wo.rows[0],
-      work_items: works,
+      work_items: normalizedWorks, // Отдаем уже нормализованный массив
       parts_items: parts,
       history: history.rows
     });
@@ -746,26 +798,29 @@ router.post('/work-orders', async (req, res) => {
 
     let subtotal = 0;
 
-    // 🔧 Сохранение работ (БЕЗ total_price — он генерируется БД)
+    // 🔧 Сохранение работ с поддержкой "По тарифу / Своя цена"
     if (workItems.length > 0) {
       console.log('🔧 Saving work_items:', workItems.length);
       
       for (const item of workItems) {
         let serviceId = null;
-        
         if (item.service_id) {
           serviceId = await resolveServiceId(item.service_id);
-          if (!serviceId) {
-            console.warn(`⚠️ Service not found: ${item.service_id}, name: ${item.name}`);
-          }
         }
         
-        let unitPrice = parseFloat(item.unit_price) || 0;
         let laborHours = parseFloat(item.labor_hours) || 0;
+        let unitPrice = parseFloat(item.unit_price) || 0;
         
-        if (unitPrice === 0 && laborHours > 0) {
+        // 🔥 ОТЛАДКА: Смотрим, что пришло с фронтенда
+        console.log(`🔍 Работа "${item.name}": пришло use_fixed_rate =`, item.use_fixed_rate, `(тип: ${typeof item.use_fixed_rate})`);
+        
+        // 🔥 СТРОГОЕ преобразование: только если пришло истинное значение, иначе false
+        const isFixedRate = item.use_fixed_rate === true || item.use_fixed_rate === 'true';
+        console.log(`➡️ Будет сохранено в БД как: isFixedRate =`, isFixedRate);
+        
+        if (isFixedRate && laborHours > 0) {
           unitPrice = calculateWorkPrice(laborHours, HOURLY_RATE);
-          console.log(`✅ Auto-calculated: ${laborHours}ч × ${HOURLY_RATE}₽ = ${unitPrice}₽`);
+          console.log(`✅ Auto-price (Fixed Rate): ${laborHours}ч × ${HOURLY_RATE}₽ = ${unitPrice}₽`);
         }
         
         const total = (parseFloat(item.quantity) || 1) * unitPrice;
@@ -774,8 +829,8 @@ router.post('/work-orders', async (req, res) => {
         await client.query(`
           INSERT INTO work_order_items (
             work_order_id, item_type, service_id, name, category, quantity, unit,
-            unit_price, labor_hours, status, notes
-          ) VALUES ($1, 'labor', $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            unit_price, labor_hours, use_fixed_rate, status, notes
+          ) VALUES ($1, 'labor', $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         `, [
           workOrderId, 
           serviceId,
@@ -785,6 +840,7 @@ router.post('/work-orders', async (req, res) => {
           item.unit || 'усл',
           unitPrice,
           laborHours,
+          isFixedRate,  // Передаем строгий boolean
           item.status || 'pending', 
           item.notes || ''
         ]);
@@ -1281,6 +1337,7 @@ router.put('/work-orders/:id', async (req, res) => {
       return res.status(404).json({ error: 'Заказ-наряд не найден' });
     }
     
+    // 1. Обновляем основные данные
     await client.query(`
       UPDATE work_orders SET
         customer_id = $1, vehicle_id = $2, vehicle_info = $3, complaint = $4, notes = $5,
@@ -1296,10 +1353,9 @@ router.put('/work-orders/:id', async (req, res) => {
       discount_value || 0, discount_reason || '',
       apply_nds || false, NDS_RATE, id
     ]);
-    
     console.log('✅ Updated work_order base data');
     
-    // 🔥 Восстанавливаем старые запчасти на склад
+    // 2. Восстанавливаем старые запчасти на склад
     const oldParts = await client.query(`
       SELECT part_id, quantity FROM work_order_items 
       WHERE work_order_id = $1 AND item_type = 'part' AND part_id IS NOT NULL
@@ -1313,41 +1369,41 @@ router.put('/work-orders/:id', async (req, res) => {
       `, [parseInt(oldPart.quantity) || 1, oldPart.part_id]);
     }
     
-    await client.query('DELETE FROM work_order_items WHERE work_order_id = $1', [id]);
-    console.log('🗑️ Cleared old work_order_items');
+    // 3. 🔥 ЖЕСТКОЕ УДАЛЕНИЕ ВСЕХ СТАРЫХ ЭЛЕМЕНТОВ (И РАБОТ, И ЗАПЧАСТЕЙ)
+    console.log('🗑️ ЖЕСТКОЕ УДАЛЕНИЕ: work_order_id =', id);
+    const deleteResult = await client.query('DELETE FROM work_order_items WHERE work_order_id = $1', [id]);
+    console.log('✅ Удалено строк из БД:', deleteResult.rowCount);
     
     let subtotal = 0;
     
-    // 🔧 Вставка новых работ (БЕЗ total_price — БД сама считает)
+    // 4. 🔧 ВСТАВКА НОВЫХ РАБОТ (ТОЛЬКО ОДИН РАЗ!)
     if (Array.isArray(work_items)) {
-      console.log('🔧 Updating work_items:', work_items.length);
+      console.log('🔧 Начинаем вставку work_items. Получено с фронтенда:', work_items.length, 'шт.');
       
       for (const item of work_items) {
         let serviceId = null;
-        
         if (item.service_id) {
           serviceId = await resolveServiceId(item.service_id);
-          if (!serviceId) {
-            console.warn(`⚠️ Service not found: ${item.service_id}, name: ${item.name}`);
-          }
         }
         
         let unitPrice = parseFloat(item.unit_price) || 0;
         let laborHours = parseFloat(item.labor_hours) || 0;
         
-        if (unitPrice === 0 && laborHours > 0) {
+        // Строгое преобразование в boolean
+        const isFixedRate = item.use_fixed_rate === true || item.use_fixed_rate === 'true';
+        console.log(`🔍 Работа "${item.name}": use_fixed_rate =`, isFixedRate);
+        
+        if (isFixedRate && laborHours > 0) {
           unitPrice = calculateWorkPrice(laborHours, HOURLY_RATE);
-          console.log(`✅ Auto-calculated: ${laborHours}ч × ${HOURLY_RATE}₽ = ${unitPrice}₽`);
         }
         
-        // subtotal считаем для расчёта НДС
         subtotal += (parseFloat(item.quantity) || 1) * unitPrice;
         
         await client.query(`
           INSERT INTO work_order_items (
             work_order_id, item_type, service_id, name, category, quantity, unit,
-            unit_price, labor_hours, status, notes
-          ) VALUES ($1, 'labor', $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            unit_price, labor_hours, use_fixed_rate, status, notes
+          ) VALUES ($1, 'labor', $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         `, [
           id, 
           serviceId,
@@ -1357,16 +1413,17 @@ router.put('/work-orders/:id', async (req, res) => {
           item.unit || 'усл',
           unitPrice,
           laborHours,
+          isFixedRate,  // 🔥 Сохраняем галочку
           item.status || 'pending', 
           item.notes || ''
         ]);
       }
-      console.log('✅ Updated work_items');
+      console.log('✅ Вставка work_items завершена');
     }
     
-    // 🔧 Вставка новых запчастей (БЕЗ total_price)
+    // 5. 🔧 ВСТАВКА НОВЫХ ЗАПЧАСТЕЙ
     if (Array.isArray(parts_items)) {
-      console.log('🔧 Updating parts_items:', parts_items.length);
+      console.log('🔧 Начинаем вставку parts_items. Получено:', parts_items.length, 'шт.');
       
       for (const item of parts_items) {
         const partId = item.part_id || item.item_id;
@@ -1413,9 +1470,10 @@ router.put('/work-orders/:id', async (req, res) => {
           item.status || 'pending'
         ]);
       }
-      console.log('✅ Updated parts_items');
+      console.log('✅ Вставка parts_items завершена');
     }
     
+    // 6. Обновляем итоги в work_orders
     const ndsAmount = calculateNDS(subtotal, NDS_RATE);
     const finalTotal = subtotal + ndsAmount;
     
@@ -1428,8 +1486,7 @@ router.put('/work-orders/:id', async (req, res) => {
     `, [subtotal, finalTotal, ndsAmount, id]);
     
     await client.query('COMMIT');
-    console.log('✅ Work order updated successfully');
-    console.log(`💰 Subtotal: ${subtotal}₽, NDS: ${ndsAmount}₽, Total: ${finalTotal}₽`);
+    console.log('✅ Work order updated successfully. Subtotal:', subtotal, 'Total:', finalTotal);
     
     res.json({ 
       success: true, 

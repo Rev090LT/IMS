@@ -20,6 +20,15 @@ function WorkOrderForm({ token }) {
   const [applyNDS, setApplyNDS] = useState(false);
   const [ndsRate, setNdsRate] = useState(0);
   const [hourlyRate, setHourlyRate] = useState(1500);
+
+  // 🔥 Состояния для создания нового клиента прямо из формы
+  const [showCreateClientModal, setShowCreateClientModal] = useState(false);
+  const [creatingClient, setCreatingClient] = useState(false);
+  const [newClientData, setNewClientData] = useState({
+    name: '',
+    phone: '',
+    type: 'individual' // 'individual' или 'legal'
+  });
   
   const [formData, setFormData] = useState({
     customer_id: '',
@@ -96,6 +105,7 @@ function WorkOrderForm({ token }) {
         if (mastersRes.ok) setMasters(extractArray(await mastersRes.json(), ['users', 'masters']));
 
         // 🔥 Загружаем данные заказ-наряда при редактировании
+        // 🔥 Загружаем данные заказ-наряда при редактировании
         if (isEditMode && id) {
           console.log('🔍 Loading order for edit:', id);
           const orderRes = await fetch(`/api/crm/work-orders/${id}`, {
@@ -136,8 +146,22 @@ function WorkOrderForm({ token }) {
               discount_reason: ''
             });
             
-            setWorkItems(worksData);
+            // 🔥 КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: Строгая проверка на истину. 
+            // Если в БД было 'f', null или undefined -> станет false (галочка снята).
+            // Если было true или 't' -> станет true (галочка стоит).
+            const normalizedWorks = worksData.map(item => ({
+              ...item,
+              use_fixed_rate: item.use_fixed_rate === true || item.use_fixed_rate === 't' || item.use_fixed_rate === 'true'
+            }));
+            
+            setWorkItems(normalizedWorks);
             setPartsItems(partsData);
+            
+            console.log('✅ Normalized works state:', normalizedWorks.map(w => ({ 
+              name: w.name, 
+              use_fixed_rate: w.use_fixed_rate,
+              unit_price: w.unit_price 
+            })));
             
             console.log('✅ Order loaded:', orderData);
           }
@@ -247,15 +271,14 @@ function WorkOrderForm({ token }) {
     return grouped;
   }, [services]);
 
-  // 🔥 Обработчики для работ (с автоподсчётом цены)
+  // 🔥 Обработчики для работ (с автоподсчётом цены и поддержкой "По тарифу")
   const addWorkItem = (template = {}) => {
     let unitPrice = template.unit_price || 0;
     const laborHours = template.labor_hours || 0;
     
-    // Если цена не указана, но есть нормо-часы — считаем автоматически
+    // Если цена не указана и есть часы — считаем сразу по ставке
     if (unitPrice === 0 && laborHours > 0) {
       unitPrice = Math.round(laborHours * hourlyRate);
-      console.log(`✅ Auto-price: ${laborHours}ч × ${hourlyRate}₽ = ${unitPrice}₽`);
     }
     
     setWorkItems(prev => [...prev, {
@@ -267,6 +290,7 @@ function WorkOrderForm({ token }) {
       unit: template.unit || 'усл',
       unit_price: unitPrice,
       labor_hours: laborHours,
+      use_fixed_rate: true, // 🔥 По умолчанию включено
       total_price: (template.quantity || 1) * unitPrice,
       status: 'pending',
       notes: '',
@@ -278,11 +302,19 @@ function WorkOrderForm({ token }) {
     setWorkItems(items => items.map(item => {
       if (item.id !== itemId) return item;
       const updated = { ...item, [field]: value };
-      if (field === 'quantity' || field === 'unit_price') {
+      
+      // 🔥 Если изменились часы и включен режим "По тарифу" — пересчитываем цену
+      if (field === 'labor_hours' && item.use_fixed_rate !== false) {
+        updated.unit_price = Math.round((value || 0) * hourlyRate);
+      }
+      
+      // Пересчет суммы
+      if (field === 'quantity' || field === 'unit_price' || field === 'labor_hours' || field === 'use_fixed_rate') {
         const qty = field === 'quantity' ? value : item.quantity || 1;
-        const price = field === 'unit_price' ? value : item.unit_price || 0;
+        const price = field === 'unit_price' ? value : updated.unit_price || 0;
         updated.total_price = qty * price;
       }
+      
       return updated;
     }));
   };
@@ -321,6 +353,59 @@ function WorkOrderForm({ token }) {
 
   const removePartItem = (itemId) => setPartsItems(items => items.filter(item => item.id !== itemId));
 
+  // 🔥 Обработчик создания нового клиента
+  const handleCreateClient = async (e) => {
+    e.preventDefault();
+    if (!newClientData.name || !newClientData.phone) {
+      alert('⚠️ Заполните имя/название и телефон');
+      return;
+    }
+
+    setCreatingClient(true);
+    try {
+      const payload = {
+        fio: newClientData.type === 'individual' ? newClientData.name : null,
+        company_name: newClientData.type === 'legal' ? newClientData.name : null,
+        phone: newClientData.phone,
+        type: newClientData.type
+      };
+
+      const response = await fetch('/api/crm/counterparties', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json', 
+          'Authorization': `Bearer ${token}` 
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const createdClient = data.counterparty || data; // Поддержка разных форматов ответа
+        
+        // 1. Добавляем в общий список
+        setCounterparties(prev => [...prev, createdClient]);
+        
+        // 2. Автоматически выбираем созданного клиента в форме
+        setFormData(prev => ({ ...prev, customer_id: createdClient.id }));
+        
+        // 3. Закрываем модалку и очищаем поля
+        setShowCreateClientModal(false);
+        setNewClientData({ name: '', phone: '', type: 'individual' });
+        
+        console.log('✅ Клиент успешно создан и выбран:', createdClient);
+      } else {
+        const err = await response.json();
+        alert(`❌ Ошибка: ${err.error || 'Не удалось создать клиента'}`);
+      }
+    } catch (err) {
+      console.error('Error creating client:', err);
+      alert('❌ Ошибка сети при создании клиента');
+    } finally {
+      setCreatingClient(false);
+    }
+  };
+
   // Отправка формы
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -351,10 +436,17 @@ function WorkOrderForm({ token }) {
         discount_value: formData.discount_value || 0,
         discount_reason: formData.discount_reason || '',
         
-        work_items: Array.isArray(workItems) ? workItems : [],
-        parts_items: Array.isArray(partsItems) ? partsItems : [],
+        // 🔥 КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: Явно приводим типы перед отправкой
+        work_items: Array.isArray(workItems) ? workItems.map(item => ({
+          ...item,
+          use_fixed_rate: item.use_fixed_rate === true || item.use_fixed_rate === 'true', // Строгий boolean
+          unit_price: parseFloat(item.unit_price) || 0,
+          labor_hours: parseFloat(item.labor_hours) || 0,
+          quantity: parseFloat(item.quantity) || 1
+        })) : [],
         
-        apply_nds: applyNDS,  // 🔥 Передаём флаг НДС
+        parts_items: Array.isArray(partsItems) ? partsItems : [],
+        apply_nds: applyNDS,
         
         totals: { 
           ...totals, 
@@ -367,7 +459,9 @@ function WorkOrderForm({ token }) {
       
       const url = isEditMode ? `/api/crm/work-orders/${id}` : '/api/crm/work-orders';
       const method = isEditMode ? 'PUT' : 'POST';
-      
+      console.log('📤 ОТПРАВКА НА СЕРВЕР. Количество работ в массиве:', payload.work_items.length);
+      console.log('📤 Массив работ:', payload.work_items.map(w => w.name));
+
       const response = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -652,21 +746,38 @@ function WorkOrderForm({ token }) {
 
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
         
-        {/* 👤 Клиент (из контрагентов) */}
+        {/* 👤 Клиент (из контрагентов) с кнопкой создания */}
         <Card title="👤 Клиент / Контрагент">
-          <select value={formData.customer_id} onChange={(e) => setFormData({ ...formData, customer_id: e.target.value })} style={inputStyle} required>
-            <option value="">Выберите контрагента...</option>
-            {safeCounterparties.map(c => {
-              const displayName = c.company_name || c.fio || 'Без имени';
-              const phone = c.phone || '';
-              const inn = c.inn ? `ИНН: ${c.inn}` : '';
-              return (
-                <option key={c.id} value={c.id}>
-                  {displayName} {phone && `• ${phone}`} {inn && `• ${inn}`}
-                </option>
-              );
-            })}
-          </select>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+            <select 
+              value={formData.customer_id} 
+              onChange={(e) => setFormData({ ...formData, customer_id: e.target.value })} 
+              style={{ ...inputStyle, flex: 1 }} 
+              required
+            >
+              <option value="">Выберите контрагента...</option>
+              {safeCounterparties.map(c => {
+                const displayName = c.company_name || c.fio || 'Без имени';
+                const phone = c.phone || '';
+                const inn = c.inn ? `ИНН: ${c.inn}` : '';
+                return (
+                  <option key={c.id} value={c.id}>
+                    {displayName} {phone && `• ${phone}`} {inn && `• ${inn}`}
+                  </option>
+                );
+              })}
+            </select>
+            
+            {/* 🔥 Кнопка быстрого создания */}
+            <button 
+              type="button" 
+              onClick={() => setShowCreateClientModal(true)} 
+              style={{ ...btnStyle, backgroundColor: '#27ae60', whiteSpace: 'nowrap', padding: '10px 15px' }}
+              title="Создать нового клиента"
+            >
+              ➕ Новый
+            </button>
+          </div>
         </Card>
 
         {/* 🚗 Автомобиль */}
@@ -743,24 +854,119 @@ function WorkOrderForm({ token }) {
                 <thead>
                   <tr style={{ backgroundColor: '#f8f9fa', borderBottom: '2px solid #ddd' }}>
                     <th style={thStyle}>Услуга</th>
-                    <th style={thStyle}>Категория</th>
-                    <th style={{ ...thStyle, width: '80px' }}>Кол-во</th>
+                    <th style={{ ...thStyle, width: '80px' }}>Часы</th>
                     <th style={{ ...thStyle, width: '100px' }}>Цена</th>
                     <th style={{ ...thStyle, width: '100px' }}>Сумма</th>
+                    <th style={{ ...thStyle, width: '130px', textAlign: 'center' }}>Режим цены</th>
                     <th style={{ ...thStyle, width: '40px' }}></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {safeWorkItems.map(item => (
-                    <tr key={item.id} style={{ borderBottom: '1px solid #eee' }}>
-                      <td style={tdStyle}><input value={item.name} onChange={(e) => updateWorkItem(item.id, 'name', e.target.value)} style={{ ...inputStyle, padding: '6px 8px', fontSize: '13px' }} placeholder="Название работы" /></td>
-                      <td style={tdStyle}><input value={item.category || ''} onChange={(e) => updateWorkItem(item.id, 'category', e.target.value)} style={{ ...inputStyle, padding: '6px 8px', fontSize: '13px' }} placeholder="Категория" /></td>
-                      <td style={tdStyle}><input type="number" min="0.1" step="0.1" value={item.quantity} onChange={(e) => updateWorkItem(item.id, 'quantity', parseFloat(e.target.value) || 0)} style={{ ...inputStyle, padding: '6px 8px', fontSize: '13px', width: '70px' }} /></td>
-                      <td style={tdStyle}><input type="number" min="0" step="0.01" value={item.unit_price} onChange={(e) => updateWorkItem(item.id, 'unit_price', parseFloat(e.target.value) || 0)} style={{ ...inputStyle, padding: '6px 8px', fontSize: '13px', width: '90px' }} /></td>
-                      <td style={{ ...tdStyle, fontWeight: '600' }}>{((item.quantity || 1) * (item.unit_price || 0)).toLocaleString('ru-RU')} ₽</td>
-                      <td style={tdStyle}><button type="button" onClick={() => removeWorkItem(item.id)} style={{ background: 'none', border: 'none', color: '#e74c3c', cursor: 'pointer', fontSize: '18px' }}>×</button></td>
-                    </tr>
-                  ))}
+                  {safeWorkItems.map(item => {
+                    const isFixedRate = item.use_fixed_rate !== false;
+                    
+                    return (
+                      <tr key={item.id} style={{ borderBottom: '1px solid #eee' }}>
+                        <td style={tdStyle}>
+                          <input 
+                            value={item.name} 
+                            onChange={(e) => updateWorkItem(item.id, 'name', e.target.value)} 
+                            style={{ ...inputStyle, padding: '6px 8px', fontSize: '13px' }} 
+                            placeholder="Название работы" 
+                          />
+                        </td>
+                        
+                        {/* Часы */}
+                        <td style={tdStyle}>
+                          <input 
+                            type="number" 
+                            min={isFixedRate ? "0.1" : "0"} 
+                            step="0.1" 
+                            value={item.labor_hours} 
+                            onChange={(e) => updateWorkItem(item.id, 'labor_hours', parseFloat(e.target.value) || 0)} 
+                            style={{ 
+                              ...inputStyle, 
+                              padding: '6px 8px', 
+                              fontSize: '13px', 
+                              width: '70px',
+                              backgroundColor: isFixedRate ? 'white' : '#f0f0f0', // Визуальная подсказка
+                              color: isFixedRate ? 'black' : '#999'
+                            }} 
+                          />
+                        </td>
+                        
+                        {/* Цена */}
+                        <td style={tdStyle}>
+                          <input 
+                            type="number" 
+                            min="0" 
+                            step="100"
+                            value={item.unit_price} 
+                            onChange={(e) => updateWorkItem(item.id, 'unit_price', parseFloat(e.target.value) || 0)} 
+                            disabled={isFixedRate}
+                            style={{ 
+                              ...inputStyle, 
+                              padding: '6px 8px', 
+                              fontSize: '13px', 
+                              width: '90px',
+                              backgroundColor: isFixedRate ? '#f0f0f0' : 'white',
+                              color: isFixedRate ? '#999' : 'black'
+                            }} 
+                          />
+                        </td>
+                        
+                        {/* Сумма */}
+                        <td style={{ ...tdStyle, fontWeight: '600' }}>
+                          {((item.quantity || 1) * (item.unit_price || 0)).toLocaleString('ru-RU')} ₽
+                        </td>
+                        
+                        {/* 🔥 Чекбокс "По тарифу / Своя цена" */}
+                        <td style={{ ...tdStyle, textAlign: 'center' }}>
+                          <label style={{ 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'center', 
+                            gap: '6px', 
+                            cursor: 'pointer',
+                            fontSize: '12px'
+                          }}>
+                            <input 
+                              type="checkbox" 
+                              checked={isFixedRate} 
+                              onChange={(e) => {
+                                const isChecked = e.target.checked;
+                                updateWorkItem(item.id, 'use_fixed_rate', isChecked);
+                                
+                                // Если включили галочку — пересчитываем цену по ставке
+                                if (isChecked) {
+                                  updateWorkItem(item.id, 'unit_price', Math.round((item.labor_hours || 0) * hourlyRate));
+                                }
+                              }}
+                              style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                            />
+                            <span style={{ 
+                              color: isFixedRate ? '#27ae60' : '#e67e22',
+                              fontWeight: '500',
+                              fontSize: '11px'
+                            }}>
+                              {isFixedRate ? `✅ По тарифу (${hourlyRate}₽/ч)` : '✋ Своя цена'}
+                            </span>
+                          </label>
+                        </td>
+                        
+                        {/* Удалить */}
+                        <td style={tdStyle}>
+                          <button 
+                            type="button" 
+                            onClick={() => removeWorkItem(item.id)} 
+                            style={{ background: 'none', border: 'none', color: '#e74c3c', cursor: 'pointer', fontSize: '18px' }}
+                          >
+                            ×
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -1032,6 +1238,83 @@ function WorkOrderForm({ token }) {
             setShowPartsSelector(false);
           }}
         />
+      )}
+
+      {/* 🔥 МОДАЛКА: Создание нового клиента */}
+      {showCreateClientModal && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex',
+          alignItems: 'center', justifyContent: 'center', zIndex: 10000,
+          padding: '20px'
+        }} onClick={(e) => e.target === e.currentTarget && setShowCreateClientModal(false)}>
+          
+          <div style={{
+            backgroundColor: 'white', borderRadius: '12px', width: '100%',
+            maxWidth: '450px', padding: '25px', boxShadow: '0 20px 60px rgba(0,0,0,0.4)'
+          }} onClick={e => e.stopPropagation()}>
+            
+            <h3 style={{ margin: '0 0 20px 0', fontSize: '18px' }}>➕ Новый клиент</h3>
+            
+            <form onSubmit={handleCreateClient} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+              <div>
+                <label style={labelStyle}>Тип клиента</label>
+                <select 
+                  value={newClientData.type} 
+                  onChange={(e) => setNewClientData({ ...newClientData, type: e.target.value })}
+                  style={inputStyle}
+                >
+                  <option value="individual">👤 Физическое лицо</option>
+                  <option value="legal">🏢 Юридическое лицо / ИП</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={labelStyle}>
+                  {newClientData.type === 'individual' ? 'ФИО клиента *' : 'Название компании *'}
+                </label>
+                <input 
+                  type="text" 
+                  value={newClientData.name}
+                  onChange={(e) => setNewClientData({ ...newClientData, name: e.target.value })}
+                  style={inputStyle}
+                  placeholder={newClientData.type === 'individual' ? 'Иванов Иван Иванович' : 'ООО "Ромашка"'}
+                  required
+                />
+              </div>
+
+              <div>
+                <label style={labelStyle}>Телефон *</label>
+                <input 
+                  type="tel" 
+                  value={newClientData.phone}
+                  onChange={(e) => setNewClientData({ ...newClientData, phone: e.target.value })}
+                  style={inputStyle}
+                  placeholder="+7 (999) 123-45-67"
+                  required
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                <button 
+                  type="button" 
+                  onClick={() => setShowCreateClientModal(false)}
+                  style={{ ...btnStyle, backgroundColor: '#95a5a6', flex: 1 }}
+                  disabled={creatingClient}
+                >
+                  Отмена
+                </button>
+                <button 
+                  type="submit" 
+                  style={{ ...btnStyle, backgroundColor: '#27ae60', flex: 1 }}
+                  disabled={creatingClient}
+                >
+                  {creatingClient ? '⏳ Создание...' : '✅ Создать и выбрать'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
     </div>
