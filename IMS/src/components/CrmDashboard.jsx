@@ -18,7 +18,10 @@ function CrmDashboard({ token }) {
       });
       if (response.ok) {
         const data = await response.json();
+        console.log('📊 Dashboard Data Received:', data); // 🔍 ОТЛАДКА
         setDashboard(data);
+      } else {
+        console.error('API Error:', response.status, response.statusText);
       }
     } catch (err) {
       console.error('Error fetching dashboard:', err);
@@ -47,34 +50,39 @@ function CrmDashboard({ token }) {
     return <div style={{ padding: '40px', textAlign: 'center' }}>⏳ Загрузка CRM...</div>;
   }
 
+  // 🔥 Безопасное получение выручки (гарантируем число)
+  const todayRevenue = Number(dashboard?.stats?.today_revenue) || 0;
+
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#f5f7fa', padding: '20px' }}>
       {/* Заголовок */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
         <h1 style={{ margin: 0, fontSize: '24px' }}>🔧 CRM Автосервис</h1>
-        <button 
-          onClick={() => navigate('/crm/work-orders/new')}
-          style={{ padding: '10px 20px', backgroundColor: '#3498db', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
-        >
-          ➕ Новый заказ-наряд
-        </button>
-                <button 
-        onClick={() => navigate('/dashboard')} 
-        style={{ 
-            padding: '10px 18px', 
-            backgroundColor: '#95a5a6', 
-            color: 'white', 
-            border: 'none', 
-            borderRadius: '8px', 
-            cursor: 'pointer',
-            fontSize: '14px',
-            transition: 'background 0.2s'
-        }}
-        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#7f8c8d'}
-        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#95a5a6'}
-        >
-        ← Назад
-      </button>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button 
+            onClick={() => navigate('/crm/work-orders/new')}
+            style={{ padding: '10px 20px', backgroundColor: '#3498db', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+          >
+            ➕ Новый заказ-наряд
+          </button>
+          <button 
+            onClick={() => navigate('/dashboard')} 
+            style={{ 
+              padding: '10px 18px', 
+              backgroundColor: '#95a5a6', 
+              color: 'white', 
+              border: 'none', 
+              borderRadius: '8px', 
+              cursor: 'pointer',
+              fontSize: '14px',
+              transition: 'background 0.2s'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#7f8c8d'}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#95a5a6'}
+          >
+            ← На главную
+          </button>
+        </div>
       </div>
 
       {/* Статистика */}
@@ -92,7 +100,9 @@ function CrmDashboard({ token }) {
           <div style={{ fontSize: '13px', color: '#666' }}>✅ Готовы к выдаче</div>
         </div>
         <div style={statCardStyle('#9b59b6')}>
-          <div style={{ fontSize: '28px', fontWeight: 'bold' }}>{dashboard?.stats?.today_revenue?.toLocaleString('ru-RU') || 0} ₽</div>
+          <div style={{ fontSize: '28px', fontWeight: 'bold' }}>
+            {todayRevenue.toLocaleString('ru-RU')} ₽
+          </div>
           <div style={{ fontSize: '13px', color: '#666' }}>💰 Выручка сегодня</div>
         </div>
       </div>
@@ -100,13 +110,13 @@ function CrmDashboard({ token }) {
       {/* Основной контент */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '20px' }}>
         
-        {/* Заказы на сегодня */}
+        {/* 🔥 ИСПРАВЛЕНО: Заказы на сегодня (читаем из today_orders) */}
         <div style={{ backgroundColor: 'white', borderRadius: '12px', padding: '20px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
           <h3 style={{ margin: '0 0 15px' }}>📋 Заказы на сегодня</h3>
           {dashboard?.today_orders?.map(order => (
             <div 
               key={order.id} 
-              style={orderRowStyle(order.priority)}
+              style={orderRowStyle(order.priority || 'normal')}
               onClick={() => navigate(`/crm/work-orders/${order.id}`)}
               onMouseEnter={(e) => e.currentTarget.style.transform = 'translateX(4px)'}
               onMouseLeave={(e) => e.currentTarget.style.transform = 'translateX(0)'}
@@ -115,7 +125,7 @@ function CrmDashboard({ token }) {
                 <div>
                   <strong>{order.order_number}</strong>
                   <div style={{ fontSize: '13px', color: '#666' }}>
-                    {order.brand} {order.model} • {order.customer_phone}
+                    {order.brand || 'Авто'} {order.model || ''} • {order.phone || 'Без телефона'}
                   </div>
                   {order.master_name && (
                     <div style={{ fontSize: '12px', color: '#999' }}>👷 {order.master_name}</div>
@@ -142,15 +152,15 @@ function CrmDashboard({ token }) {
           ))}
           {(!dashboard?.today_orders || dashboard.today_orders.length === 0) && (
             <div style={{ textAlign: 'center', padding: '30px', color: '#999' }}>
-              Нет заказов на сегодня
+              На сегодня заказов нет 🎉
             </div>
           )}
         </div>
 
-        {/* Просроченные заказы */}
+        {/* 🔥 ИСПРАВЛЕНО: Просроченные заказы (читаем из overdue_orders) */}
         <div style={{ backgroundColor: 'white', borderRadius: '12px', padding: '20px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
           <h3 style={{ margin: '0 0 15px' }}>⚠️ Просроченные заказы</h3>
-          {dashboard?.pending_orders?.map(order => (
+          {dashboard?.overdue_orders?.map(order => (
             <div 
               key={order.id} 
               style={{ ...orderRowStyle('urgent'), borderLeft: '3px solid #e74c3c' }}
@@ -160,48 +170,53 @@ function CrmDashboard({ token }) {
                 <div>
                   <strong>{order.order_number}</strong>
                   <div style={{ fontSize: '13px', color: '#666' }}>
-                    {order.brand} {order.model}
+                    {order.brand || 'Авто'} {order.model || ''}
                   </div>
                 </div>
                 <div style={{ textAlign: 'right', color: '#e74c3c', fontWeight: '500' }}>
-                  +{Math.round(order.hours_overdue)}ч
+                  +{Math.round(order.hours_overdue || 0)}ч
                 </div>
               </div>
               <div style={{ fontSize: '12px', color: '#999', marginTop: '5px' }}>
-                Обещано: {new Date(order.promised_at).toLocaleString('ru-RU')}
+                Обещано: {order.promised_at ? new Date(order.promised_at).toLocaleString('ru-RU') : 'Не указано'}
               </div>
             </div>
           ))}
-          {(!dashboard?.pending_orders || dashboard.pending_orders.length === 0) && (
+          {(!dashboard?.overdue_orders || dashboard.overdue_orders.length === 0) && (
             <div style={{ textAlign: 'center', padding: '30px', color: '#999' }}>
               ✅ Все заказы в срок
             </div>
           )}
         </div>
-
       </div>
 
       {/* График выручки */}
       <div style={{ backgroundColor: 'white', borderRadius: '12px', padding: '20px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)', marginTop: '20px' }}>
         <h3 style={{ margin: '0 0 15px' }}>📊 Выручка за 7 дней</h3>
-        <div style={{ display: 'flex', alignItems: 'end', gap: '8px', height: '150px' }}>
-          {dashboard?.revenue_chart?.map((day, idx) => (
-            <div key={idx} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <div style={{ 
-                width: '100%', 
-                backgroundColor: '#3498db', 
-                borderRadius: '4px 4px 0 0',
-                height: `${Math.min((day.revenue / 50000) * 100, 100)}%`,
-                minHeight: day.revenue > 0 ? '10px' : '0'
-              }} />
-              <div style={{ fontSize: '10px', color: '#666', marginTop: '5px' }}>
-                {new Date(day.date).toLocaleDateString('ru-RU', {day: 'numeric'})}
+        <div style={{ display: 'flex', alignItems: 'end', gap: '8px', height: '150px', paddingBottom: '10px' }}>
+          {dashboard?.revenue_chart?.map((day, idx) => {
+            const revenue = Number(day.revenue) || 0;
+            const maxRevenue = 50000; // Масштаб графика
+            const heightPercent = Math.min((revenue / maxRevenue) * 100, 100);
+            
+            return (
+              <div key={idx} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                <div style={{ 
+                  width: '100%', 
+                  backgroundColor: revenue > 0 ? '#3498db' : '#ecf0f1', 
+                  borderRadius: '4px 4px 0 0',
+                  height: `${Math.max(heightPercent, revenue > 0 ? 5 : 2)}%`,
+                  transition: 'height 0.3s ease'
+                }} />
+                <div style={{ fontSize: '11px', color: '#666', marginTop: '8px', fontWeight: '500' }}>
+                  {day.label || new Date(day.date).toLocaleDateString('ru-RU', {day: 'numeric', month: 'numeric'})}
+                </div>
+                <div style={{ fontSize: '10px', color: '#999' }}>
+                  {revenue >= 1000 ? `${(revenue / 1000).toFixed(1)}к` : revenue}
+                </div>
               </div>
-              <div style={{ fontSize: '9px', color: '#999' }}>
-                {(day.revenue / 1000).toFixed(0)}к
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>

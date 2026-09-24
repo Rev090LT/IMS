@@ -779,18 +779,33 @@ router.get('/work-orders', async (req, res) => {
     
     // 🔥 ДОБАВЛЕНО: извлекаем brand/model/year из vehicle_info и добавляем assigned_master_name
     let query = `
-      SELECT wo.id, wo.order_number, wo.status, wo.promised_at, wo.completed_at,
-            wo.vehicle_info, wo.complaint, wo.notes, wo.final_total,
-            cp.company_name, cp.fio, cp.phone,
-            u.username as master_name,
-            u.username as assigned_master_name,
-            u.full_name as assigned_master_full_name,
-            COALESCE(wo.vehicle_info->>'brand', '') AS brand,
-            COALESCE(wo.vehicle_info->>'model', '') AS model,
-            COALESCE(wo.vehicle_info->>'year', '') AS year,
-            COALESCE(wo.vehicle_info->>'vin', '') AS vin,
-            COALESCE(wo.vehicle_info->>'license_plate', '') AS license_plate,
-            wo.created_at, wo.updated_at
+      SELECT 
+        wo.id, 
+        wo.order_number, 
+        wo.customer_id, 
+        wo.status, 
+        wo.promised_at, 
+        wo.completed_at,
+        wo.vehicle_info, 
+        wo.complaint, 
+        wo.notes, 
+        wo.final_total,
+        
+        -- 🔥 ГЛАВНОЕ ПОЛЕ: объединяем название компании и ФИО
+        COALESCE(cp.company_name, cp.fio, 'Без клиента') AS customer_name,
+        cp.phone AS customer_phone,
+        
+        u.username AS assigned_master_name,
+        u.full_name AS assigned_master_full_name,
+        
+        COALESCE(wo.vehicle_info->>'brand', '') AS brand,
+        COALESCE(wo.vehicle_info->>'model', '') AS model,
+        COALESCE(wo.vehicle_info->>'year', '') AS year,
+        COALESCE(wo.vehicle_info->>'vin', '') AS vin,
+        COALESCE(wo.vehicle_info->>'license_plate', '') AS license_plate,
+        
+        wo.created_at, 
+        wo.updated_at
       FROM work_orders wo
       LEFT JOIN counterparties cp ON wo.customer_id = cp.id
       LEFT JOIN users u ON wo.assigned_master::text = u.id::text
@@ -1459,6 +1474,8 @@ router.put('/work-orders/:id', async (req, res) => {
     }
     
     // 1. Обновляем основные данные
+    // 1. Обновляем основные данные
+    // 1. Обновляем основные данные
     await client.query(`
       UPDATE work_orders SET
         customer_id = $1, vehicle_id = $2, vehicle_info = $3, complaint = $4, notes = $5,
@@ -1649,18 +1666,45 @@ router.delete('/work-orders/:id', async (req, res) => {
 
 // ==================== ДАШБОРД ====================
 
+// ==================== ДАШБОРД ====================
+
 router.get('/dashboard', async (req, res) => {
   try {
-    const [stats, pendingOrders, revenue, topServices] = await Promise.all([
+    // 🔥 ВАЖНО: Здесь должно быть 5 переменных, включая todayOrders и overdueOrders
+    const [stats, todayOrders, overdueOrders, revenue, topServices] = await Promise.all([
+      
+      // 1. Статистика
       pool.query(`
         SELECT 
-          (SELECT COUNT(*) FROM work_orders WHERE status = 'in_progress') as active_orders,
+          (SELECT COUNT(*) FROM work_orders WHERE status IN ('in_progress', 'accepted')) as active_orders,
           (SELECT COUNT(*) FROM work_orders WHERE status = 'waiting_parts') as waiting_parts,
-          (SELECT COUNT(*) FROM work_orders WHERE status = 'ready') as ready_for_pickup,
+          (SELECT COUNT(*) FROM work_orders WHERE status IN ('ready', 'closed')) as ready_for_pickup,
           (SELECT COUNT(*) FROM counterparties WHERE created_at >= CURRENT_DATE - INTERVAL '30 days') as active_customers_30d,
-          (SELECT SUM(final_total) FROM work_orders WHERE completed_at >= CURRENT_DATE) as today_revenue,
-          (SELECT COUNT(*) FROM work_orders WHERE promised_at < NOW() AND status NOT IN ('completed','cancelled','archived')) as overdue_orders
+          (SELECT COALESCE(SUM(final_total), 0) FROM work_orders WHERE status IN ('completed', 'closed') AND DATE(completed_at) = CURRENT_DATE) as today_revenue,
+          (SELECT COUNT(*) FROM work_orders WHERE promised_at < NOW() AND status NOT IN ('completed', 'closed', 'cancelled', 'archived')) as overdue_orders
       `),
+      
+      // 2. 🔥 ЗАКАЗЫ НА СЕГОДНЯ
+      pool.query(`
+        SELECT wo.id, wo.order_number, wo.promised_at, wo.status, wo.priority,
+               cp.phone,
+               (wo.vehicle_info::jsonb)->>'brand' as brand,
+               (wo.vehicle_info::jsonb)->>'model' as model,
+               u.username as master_name,
+               EXTRACT(EPOCH FROM (NOW() - wo.promised_at))/3600 as hours_overdue
+        FROM work_orders wo
+        JOIN counterparties cp ON wo.customer_id = cp.id
+        LEFT JOIN users u ON wo.assigned_master::text = u.id::text
+        WHERE wo.status IN ('accepted', 'in_progress', 'waiting_parts', 'ready')
+          AND (
+            DATE(wo.promised_at) = CURRENT_DATE 
+            OR (wo.promised_at IS NULL AND DATE(wo.created_at) = CURRENT_DATE)
+          )
+        ORDER BY wo.promised_at ASC NULLS LAST
+        LIMIT 10
+      `),
+
+      // 3. ПРОСРОЧЕННЫЕ ЗАКАЗЫ
       pool.query(`
         SELECT wo.id, wo.order_number, wo.promised_at, wo.status,
                cp.phone,
@@ -1671,29 +1715,39 @@ router.get('/dashboard', async (req, res) => {
         FROM work_orders wo
         JOIN counterparties cp ON wo.customer_id = cp.id
         LEFT JOIN users u ON wo.assigned_master::text = u.id::text
-        WHERE wo.promised_at < NOW() AND wo.status NOT IN ('completed', 'cancelled', 'archived')
+        WHERE wo.promised_at < NOW() AND wo.status NOT IN ('completed', 'closed', 'cancelled', 'archived')
         ORDER BY wo.promised_at ASC LIMIT 10
       `),
+      
+      // 4. Выручка за 7 дней
       pool.query(`
-        SELECT DATE(wo.completed_at) as date, SUM(wo.final_total) as revenue
-        FROM work_orders wo
-        WHERE wo.status = 'completed' AND wo.completed_at >= CURRENT_DATE - INTERVAL '7 days'
-        GROUP BY DATE(wo.completed_at) ORDER BY date
+        SELECT 
+          TO_CHAR(d.date, 'DD.MM') as label,
+          d.date,
+          COALESCE(SUM(wo.final_total), 0) as revenue
+        FROM generate_series(CURRENT_DATE - INTERVAL '6 days', CURRENT_DATE, INTERVAL '1 day') AS d(date)
+        LEFT JOIN work_orders wo ON DATE(wo.completed_at) = d.date AND wo.status IN ('completed', 'closed')
+        GROUP BY d.date
+        ORDER BY d.date ASC
       `),
+      
+      // 5. Популярные услуги
       pool.query(`
-        SELECT s.name, s.category, COUNT(*) as usage_count, SUM(woi.total_price) as revenue
+        SELECT s.name, s.category, COUNT(*) as usage_count, COALESCE(SUM(woi.total_price), 0) as revenue
         FROM services s
         JOIN work_order_items woi ON s.id = woi.service_id
         JOIN work_orders wo ON woi.work_order_id = wo.id
-        WHERE wo.status = 'completed' AND wo.completed_at >= CURRENT_DATE - INTERVAL '30 days'
+        WHERE wo.status IN ('completed', 'closed') AND wo.completed_at >= CURRENT_DATE - INTERVAL '30 days'
         GROUP BY s.id, s.name, s.category
         ORDER BY usage_count DESC LIMIT 5
       `)
     ]);
     
+    // 🔥 ВАЖНО: Отправляем именно эти ключи
     res.json({
       stats: stats.rows[0] || {},
-      pending_orders: pendingOrders.rows,
+      today_orders: todayOrders.rows,       // <-- ДОЛЖНО БЫТЬ ЗДЕСЬ
+      overdue_orders: overdueOrders.rows,   // <-- И ЗДЕСЬ
       revenue_chart: revenue.rows,
       top_services: topServices.rows
     });

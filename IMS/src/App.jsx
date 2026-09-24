@@ -159,7 +159,7 @@ function App() {
           {/* === CRM РОУТЫ (только один раз!) === */}
           <Route path="/crm" element={
             <PrivateRoute>
-              <CrmDashboard token={token} />
+              <InDevelopment token={token} />
             </PrivateRoute>
           } />
           <Route path="/crm/work-orders" element={

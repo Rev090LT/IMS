@@ -27,9 +27,8 @@ function WorkOrdersList({ token }) {
       });
       if (response.ok) {
         const data = await response.json();
-        console.log('API Response:', data); // 🔍 Для отладки
         
-        // 🔧 Безопасное извлечение массива: пробуем разные варианты
+        // Безопасное извлечение массива
         const ordersArray = Array.isArray(data) 
           ? data 
           : Array.isArray(data?.work_orders) 
@@ -58,7 +57,8 @@ function WorkOrdersList({ token }) {
       'ready': '#27ae60',
       'completed': '#2ecc71',
       'cancelled': '#e74c3c',
-      'archived': '#7f8c8d'
+      'archived': '#7f8c8d',
+      'closed': '#34495e'
     };
     return colors[status] || '#95a5a6';
   };
@@ -70,7 +70,8 @@ function WorkOrdersList({ token }) {
       'in_progress': '🔧 В работе',
       'waiting_parts': '⏳ Ждём запчасти',
       'ready': '✅ Готов к выдаче',
-      'completed': '✅ Завершён',
+      'completed': '✔️ Завершён',
+      'closed': '🔒 Закрыт',
       'cancelled': '❌ Отменён',
       'archived': '📁 Архив'
     };
@@ -98,6 +99,8 @@ function WorkOrdersList({ token }) {
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: '20px',
+    flexWrap: 'wrap',
+    gap: '10px'
   };
 
   const filtersStyle = {
@@ -123,6 +126,7 @@ function WorkOrdersList({ token }) {
     borderRadius: '12px',
     overflow: 'hidden',
     boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+    borderCollapse: 'collapse',
   };
 
   const thStyle = {
@@ -151,7 +155,6 @@ function WorkOrdersList({ token }) {
     backgroundColor: color,
   });
 
-  // 🔧 Гарантируем, что orders — всегда массив
   const safeOrders = Array.isArray(orders) ? orders : [];
 
   return (
@@ -159,36 +162,27 @@ function WorkOrdersList({ token }) {
       {/* Заголовок */}
       <div style={headerStyle}>
         <h1 style={{ margin: 0, fontSize: '24px' }}>📋 Заказ-наряды</h1>
-        <button
-          onClick={() => navigate('/crm/work-orders/new')}
-          style={{ padding: '10px 20px', backgroundColor: '#3498db', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
-        >
-          ➕ Новый заказ-наряд
-        </button>
-        <button 
-        onClick={() => navigate('/dashboard')} 
-        style={{ 
-            padding: '10px 18px', 
-            backgroundColor: '#95a5a6', 
-            color: 'white', 
-            border: 'none', 
-            borderRadius: '8px', 
-            cursor: 'pointer',
-            fontSize: '14px',
-            transition: 'background 0.2s'
-        }}
-        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#7f8c8d'}
-        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#95a5a6'}
-        >
-        ← Назад
-      </button>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button
+            onClick={() => navigate('/crm/work-orders/new')}
+            style={{ padding: '10px 20px', backgroundColor: '#3498db', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '500' }}
+          >
+            ➕ Новый заказ-наряд
+          </button>
+          <button 
+            onClick={() => navigate('/dashboard')} 
+            style={{ padding: '10px 18px', backgroundColor: '#95a5a6', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '14px' }}
+          >
+            ← Назад
+          </button>
+        </div>
       </div>
 
       {/* Фильтры */}
       <div style={filtersStyle}>
         <input
           type="text"
-          placeholder="🔍 Поиск по номеру или жалобе..."
+          placeholder="🔍 Поиск по номеру, жалобе или клиенту..."
           value={filters.search}
           onChange={(e) => setFilters({ ...filters, search: e.target.value })}
           style={{ ...inputStyle, flex: 1, minWidth: '200px' }}
@@ -205,6 +199,7 @@ function WorkOrdersList({ token }) {
           <option value="waiting_parts">Ждём запчасти</option>
           <option value="ready">Готов к выдаче</option>
           <option value="completed">Завершён</option>
+          <option value="closed">Закрыт</option>
           <option value="cancelled">Отменён</option>
         </select>
         <input
@@ -257,15 +252,12 @@ function WorkOrdersList({ token }) {
               </tr>
             ) : (
               safeOrders.map(order => {
-                // 🔧 Безопасное получение priority с фолбэком
                 const priority = getPriorityBadge(order?.priority || 'normal');
-                
-                // 🔧 Безопасное получение vehicle_info
                 const vehicle = order?.vehicle_info || {};
-                const vehicleText = vehicle?.brand || vehicle?.make || order?.vehicle || '—';
                 
-                // 🔧 Безопасное получение customer_phone
-                const customerPhone = order?.customer_phone || order?.customer?.phone || '—';
+                // 🔥 ИСПРАВЛЕНО: Берем customer_name вместо customer_phone
+                const customerName = order?.customer_name || 'Без клиента';
+                const customerPhone = order?.customer_phone || '—';
                 const loyaltyLevel = order?.loyalty_level;
                 
                 return (
@@ -273,20 +265,32 @@ function WorkOrdersList({ token }) {
                     key={order?.id || Math.random()}
                     onClick={() => order?.id && navigate(`/crm/work-orders/${order.id}`)}
                     style={{ cursor: order?.id ? 'pointer' : 'default', transition: 'all 0.2s' }}
-                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f0f8ff'}
                     onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
                   >
-                    <td style={{ ...tdStyle, fontWeight: '600' }}>{order?.order_number || '—'}</td>
+                    <td style={{ ...tdStyle, fontWeight: '600', color: '#2c3e50' }}>
+                      {order?.order_number || '—'}
+                    </td>
+                    
+                    {/* 🔥 ИСПРАВЛЕННАЯ КОЛОНКА КЛИЕНТА */}
                     <td style={tdStyle}>
-                      {customerPhone}
-                      {loyaltyLevel && loyaltyLevel !== 'bronze' && (
-                        <span style={{ marginLeft: '5px', fontSize: '10px' }}>
-                          {loyaltyLevel === 'gold' ? '🥇' : loyaltyLevel === 'silver' ? '🥈' : '🥉'}
-                        </span>
+                      <div style={{ fontWeight: '500', color: '#2c3e50' }}>
+                        {customerName}
+                        {loyaltyLevel && loyaltyLevel !== 'bronze' && (
+                          <span style={{ marginLeft: '6px', fontSize: '12px' }}>
+                            {loyaltyLevel === 'gold' ? '🥇' : loyaltyLevel === 'silver' ? '🥈' : '🥉'}
+                          </span>
+                        )}
+                      </div>
+                      {customerPhone !== '—' && (
+                        <div style={{ fontSize: '12px', color: '#7f8c8d', marginTop: '2px' }}>
+                          {customerPhone}
+                        </div>
                       )}
                     </td>
+
                     <td style={tdStyle}>
-                      {vehicleText} {vehicle?.model ? vehicle.model : ''}
+                      {vehicle?.brand || '—'} {vehicle?.model || ''} {vehicle?.year ? `(${vehicle.year})` : ''}
                     </td>
                     <td style={tdStyle}>
                       <span style={badgeStyle(getStatusColor(order?.status))}>
@@ -296,11 +300,13 @@ function WorkOrdersList({ token }) {
                     <td style={tdStyle}>
                       <span style={badgeStyle(priority.color)}>{priority.label}</span>
                     </td>
-                    <td style={tdStyle}>{order?.master_name || order?.assigned_master || 'Не назначен'}</td>
                     <td style={tdStyle}>
+                      {order?.assigned_master_name || order?.master_name || 'Не назначен'}
+                    </td>
+                    <td style={{ ...tdStyle, fontWeight: '600', color: '#27ae60' }}>
                       {order?.final_total ? `${Number(order.final_total).toLocaleString('ru-RU')} ₽` : '—'}
                     </td>
-                    <td style={tdStyle}>
+                    <td style={{ ...tdStyle, color: '#666', fontSize: '13px' }}>
                       {order?.created_at ? new Date(order.created_at).toLocaleDateString('ru-RU') : '—'}
                     </td>
                   </tr>
