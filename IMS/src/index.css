@@ -10,15 +10,14 @@ body {
 
 #root {
   min-height: 100vh;
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  padding: 20px;
+  display: block; /* ← Изменил с flex на block */
+  padding: 0; /* ← Убрал padding */
+  width: 100%; /* ← Добавил полную ширину */
 }
 
 .container {
   width: 100%;
-  max-width: 600px;
+  max-width: 100%; /* ← Убрал ограничение 600px */
   background: white;
   border-radius: 8px;
   padding: 20px;

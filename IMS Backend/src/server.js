@@ -29,11 +29,28 @@ if (!fs.existsSync(logFilePath)) {
   console.log('Created app.log file');
 }
 
+// Логи для отладки подключения к БД
+console.log('Environment variables:');
+console.log('DB_HOST:', process.env.DB_HOST);
+console.log('DATABASE_URL:', process.env.DATABASE_URL);
+console.log('Pool options:', {
+  host: pool.options.host,
+  port: pool.options.port,
+  database: pool.options.database,
+  user: pool.options.user
+});
+
 // Проверим подключение к БД
 pool.query('SELECT NOW()', (err, res) => {
   console.log('Database connect started...');
   if (err) {
     console.error('Database connection failed:', err);
+    console.log('Connection attempt details:');
+    console.log('- Host:', pool.options.host);
+    console.log('- Port:', pool.options.port);
+    console.log('- Database:', pool.options.database);
+    console.log('- User:', pool.options.user);
+    console.log('- Connection String:', pool.options.connectionString);
     return;
   }
 

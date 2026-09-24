@@ -1,5 +1,17 @@
 import { useState, useEffect } from 'react';
-import { moveItem, getAllLocations, getItemByName } from '../services/api';
+import { getAllLocations, getItemByName } from '../services/api';
+
+// Убедись, что moveItem отправляет именно такой объект, как в handleSubmit ниже
+const moveItem = async (data, token) => {
+  return fetch('/api/movements', {
+    method: 'POST',
+    headers: { 
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}` 
+    },
+    body: JSON.stringify(data)
+  });
+};
 
 function MoveModal({ onClose, token }) {
   const [qrCode, setQrCode] = useState('');
@@ -26,39 +38,35 @@ function MoveModal({ onClose, token }) {
           setError(data.error || 'Ошибка загрузки складов');
         }
       } catch (err) {
-        setError('Network error or server is reachable');
+        setError('Ошибка сети при загрузке складов');
         console.error('Error fetching locations:', err);
       } finally {
         setLoading(false);
       }
     };
-
     fetchLocations();
   }, [token]);
 
-  // <<<--- Функция для получения количества товара на локации --->
-  const fetchAvailableQuantity = async (qrCode, locationId) => {
-    if (!qrCode || !locationId) {
+  // Получение количества товара на конкретной локации
+  const fetchAvailableQuantity = async (qr, locationId) => {
+    if (!qr || !locationId) {
       setAvailableQuantity(0);
       return;
     }
 
     try {
-      const response = await fetch(`/api/items/${qrCode}`, {
+      // Предполагаем, что этот эндпоинт возвращает данные товара, включая quantity и location_id
+      const response = await fetch(`/api/items/${qr}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
-      if (!response.ok) {
-        console.error('Error fetching item details:', response.statusText);
-        setAvailableQuantity(0);
-        return;
-      }
-
-      const item = await response.json();
-      
-      // <<<--- Найдем количество товара на конкретной локации --->
-      if (item.location_id == locationId) {
-        setAvailableQuantity(item.quantity);
+      if (response.ok) {
+        const item = await response.json();
+        if (item.location_id == locationId) {
+          setAvailableQuantity(item.quantity || 0);
+        } else {
+          setAvailableQuantity(0);
+        }
       } else {
         setAvailableQuantity(0);
       }
@@ -68,17 +76,17 @@ function MoveModal({ onClose, token }) {
     }
   };
 
-  // <<<--- Обновим количество при изменении qrCode или fromLocationId --->
   useEffect(() => {
     fetchAvailableQuantity(qrCode, fromLocationId);
   }, [qrCode, fromLocationId, token]);
 
-  // <<<--- Обновим quantity при изменении availableQuantity --->
   useEffect(() => {
-    setQuantity(prev => Math.max(1, Math.min(prev, availableQuantity))); // <<<--- Вот тут исправили: Math.max(1, ...)
+    setQuantity(prev => {
+      const newVal = Math.max(1, Math.min(prev, availableQuantity));
+      return availableQuantity > 0 ? newVal : 1;
+    });
   }, [availableQuantity]);
 
-  // <<<--- Функция для поиска по имени --->
   const handleItemNameChange = async (e) => {
     const name = e.target.value;
     setItemName(name);
@@ -88,34 +96,34 @@ function MoveModal({ onClose, token }) {
         const response = await getItemByName(name, token);
         const data = await response.json();
 
-        if (response.ok) {
-          // <<<--- Добавим информацию о локации в результаты поиска --->
+        if (response.ok && Array.isArray(data)) {
           const itemsWithLocation = await Promise.all(data.map(async (item) => {
-            const detailsResponse = await fetch(`/api/items/${item.qr_code}`, {
-              headers: { 'Authorization': `Bearer ${token}` }
-            });
-
-            if (detailsResponse.ok) {
-              const details = await detailsResponse.json();
-              const location = locations.find(loc => loc.id === details.location_id);
-              return { ...item, current_location_id: details.location_id, current_location_name: location?.name };
+            try {
+              const detailsResponse = await fetch(`/api/items/${item.qr_code}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+              });
+              if (detailsResponse.ok) {
+                const details = await detailsResponse.json();
+                const location = locations.find(loc => loc.id === details.location_id);
+                return { ...item, current_location_id: details.location_id, current_location_name: location?.name };
+              }
+            } catch (err) {
+              console.warn(`Не удалось получить детали для ${item.qr_code}`);
             }
-            return { ...item, current_location_id: null, current_location_name: null };
+            return { ...item, current_location_id: null, current_location_name: 'Неизвестно' };
           }));
 
           setSearchResults(itemsWithLocation);
           setShowDropdown(true);
           setError('');
         } else {
-          setError(data.error || 'Не удалось получить товар');
           setSearchResults([]);
           setShowDropdown(false);
         }
       } catch (err) {
-        setError('Network error or server is unreachable');
+        console.error('Error fetching item by name:', err);
         setSearchResults([]);
         setShowDropdown(false);
-        console.error('Error fetching item by name:', err);
       }
     } else {
       setSearchResults([]);
@@ -123,27 +131,16 @@ function MoveModal({ onClose, token }) {
     }
   };
 
-  // <<<--- Функция для выбора товара из списка --->
   const handleSelectItem = (item) => {
-    setQrCode(item.qr_code); // <<<--- Подставляем QR-код
-    setItemName(item.name); // <<<--- Подставляем имя
-    setFromLocationId(item.current_location_id || ''); // <<<--- Подставляем локацию
-    setSearchResults([]); // <<<--- Очищаем результаты
-    setShowDropdown(false); // <<<--- Скрываем список
-    setAvailableQuantity(0); // <<<--- Сбросим доступное количество
+    setQrCode(item.qr_code);
+    setItemName(item.name);
+    setFromLocationId(item.current_location_id || '');
+    setSearchResults([]);
+    setShowDropdown(false);
+    setAvailableQuantity(0); // Сбросим, чтобы useEffect пересчитал заново
   };
 
   const handleSubmit = async () => {
-    console.log('=== DEBUG: handleSubmit START ===');
-    console.log('qrCode:', qrCode, typeof qrCode);
-    console.log('fromLocationId:', fromLocationId, typeof fromLocationId);
-    console.log('toLocationId:', toLocationId, typeof toLocationId);
-    console.log('quantity:', quantity, typeof quantity);
-    console.log('parseInt(from):', parseInt(fromLocationId), 'isNaN?', isNaN(parseInt(fromLocationId)));
-    console.log('parseInt(to):', parseInt(toLocationId), 'isNaN?', isNaN(parseInt(toLocationId)));
-    console.log('parseInt(qty):', parseInt(quantity), 'isNaN?', isNaN(parseInt(quantity)));
-    console.log('availableQuantity:', availableQuantity);
-
     setError('');
     setSuccess('');
 
@@ -151,64 +148,53 @@ function MoveModal({ onClose, token }) {
     const parsedToId = parseInt(toLocationId);
     const parsedQuantity = parseInt(quantity);
 
-    // <<<--- Строгая проверка — теперь мы точно знаем, почему ошибка --->
     if (!qrCode || qrCode.trim() === '') {
-      setError('❌ QR Code пустой или не строка');
+      setError('❌ QR-код не указан');
       return;
     }
     if (isNaN(parsedFromId) || parsedFromId <= 0) {
-      setError(`❌ From Location невалидный: "${fromLocationId}" → parsed=${parsedFromId}`);
+      setError('❌ Выберите склад отправления');
       return;
     }
     if (isNaN(parsedToId) || parsedToId <= 0) {
-      setError(`❌ To Location невалидный: "${toLocationId}" → parsed=${parsedToId}`);
+      setError('❌ Выберите склад назначения');
       return;
     }
     if (isNaN(parsedQuantity) || parsedQuantity <= 0) {
-      setError(`❌ Quantity невалиден: "${quantity}" → parsed=${parsedQuantity}`);
+      setError('❌ Укажите корректное количество');
       return;
     }
-
     if (parsedQuantity > availableQuantity) {
-      setError(`⚠️ Количество (${parsedQuantity}) > доступного (${availableQuantity})`);
+      setError(`⚠️ Количество (${parsedQuantity}) превышает доступное (${availableQuantity})`);
       return;
     }
-
     if (parsedFromId === parsedToId) {
-      setError('❌ From и To склады одинаковы');
+      setError('❌ Склад отправления и назначения не могут совпадать');
       return;
     }
 
     try {
-      console.log('✅ Все параметры валидны. Отправляем запрос...');
       const response = await moveItem({
         qr_code: qrCode,
         from_location_id: parsedFromId,
         to_location_id: parsedToId,
-        quantity: parsedQuantity
+        quantity: parsedQuantity,
+        notes: `Перемещение из ${fromLocationId} в ${toLocationId}`
       }, token);
 
       const data = await response.json();
-      console.log('🔍 Response status:', response.status);
-      console.log('🔍 Response data:', data);
 
       if (response.ok) {
-        setSuccess('✅ Товар перемещён успешно!');
-        // сброс формы
-        setQrCode('');
-        setItemName('');
-        setFromLocationId('');
-        setToLocationId('');
-        setQuantity(1);
-        setAvailableQuantity(0);
-        setSearchResults([]);
-        setShowDropdown(false);
+        setSuccess('✅ Товар успешно перемещён!');
+        setTimeout(() => {
+          onClose(); // Закрываем модалку через 1.5 секунды после успеха
+        }, 1500);
       } else {
-        setError(`❌ Ошибка сервера: ${data.error || 'Неизвестная ошибка'}`);
+        setError(`❌ Ошибка: ${data.error || 'Неизвестная ошибка сервера'}`);
       }
     } catch (err) {
-      console.error('💥 Ошибка сети/сервера:', err);
-      setError(`Network error: ${err.message}`);
+      console.error('💥 Ошибка сети:', err);
+      setError(`Ошибка сети: ${err.message}`);
     }
   };
 
@@ -227,14 +213,15 @@ function MoveModal({ onClose, token }) {
           {loading ? (
             <p>Загрузка складов...</p>
           ) : (
-            <form className="modal-form">
+            <form className="modal-form" onSubmit={(e) => { e.preventDefault(); handleSubmit(); }}>
               <div style={{ position: 'relative' }}>
                 <label>Наименование:</label>
                 <input
                   type="text"
                   value={itemName || ''}
                   onChange={handleItemNameChange}
-                  placeholder="Введите наименование для подстановки QR-кода"
+                  placeholder="Введите наименование для поиска"
+                  autoComplete="off"
                 />
                 
                 {showDropdown && searchResults.length > 0 && (
@@ -252,22 +239,24 @@ function MoveModal({ onClose, token }) {
                     listStyle: 'none',
                     padding: 0,
                     margin: '5px 0 0 0',
-                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                    boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
                   }}>
                     {searchResults.map((item, index) => (
                       <li
                         key={item.id || index}
                         onClick={() => handleSelectItem(item)}
                         style={{
-                          padding: '8px',
+                          padding: '10px',
                           cursor: 'pointer',
                           borderBottom: index < searchResults.length - 1 ? '1px solid #eee' : 'none',
+                          transition: 'background 0.2s'
                         }}
-                        onMouseDown={(e) => e.preventDefault()}
+                        onMouseEnter={(e) => e.target.style.backgroundColor = '#f5f5f5'}
+                        onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
                       >
-                        <div>{item.name}</div>
-                        <div style={{ fontSize: '12px', color: '#666' }}>
-                          QR: {item.qr_code}, Склад: {item.current_location_name || 'Неизвестно'}
+                        <div style={{ fontWeight: '500' }}>{item.name}</div>
+                        <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
+                          QR: {item.qr_code} • Склад: {item.current_location_name || 'Неизвестно'}
                         </div>
                       </li>
                     ))}
@@ -281,7 +270,8 @@ function MoveModal({ onClose, token }) {
                   type="text"
                   value={qrCode || ''}
                   onChange={(e) => setQrCode(e.target.value)}
-                  required
+                  readOnly // Делаем read-only, так как он подставляется из поиска, но можно убрать, если нужен ручной ввод
+                  style={{ backgroundColor: '#f9f9f9' }}
                 />
               </div>
 
@@ -308,7 +298,7 @@ function MoveModal({ onClose, token }) {
                   onChange={(e) => setToLocationId(e.target.value)}
                   required
                 >
-                  <option value="">Выбрать склад</option>
+                  <option value="">Выберите склад</option>
                   {locations.map(location => (
                     <option key={location.id} value={location.id}>
                       {location.name}
@@ -339,7 +329,7 @@ function MoveModal({ onClose, token }) {
 
         <div className="modal-actions">
           <button type="button" onClick={onClose} className="cancel">Отмена</button>
-          <button type="button" onClick={handleSubmit}>Переместить</button>
+          <button type="button" onClick={handleSubmit} style={{ backgroundColor: '#27ae60', color: 'white' }}>Переместить</button>
         </div>
       </div>
     </div>
