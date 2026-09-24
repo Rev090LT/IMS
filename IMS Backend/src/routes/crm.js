@@ -486,6 +486,7 @@ router.get('/counterparties', async (req, res) => {
   }
 });
 
+
 // ============================================================================
 // POST /api/crm/counterparties — Создание нового контрагента (Клиента)
 // ============================================================================
@@ -523,6 +524,118 @@ router.post('/counterparties', async (req, res) => {
     
   } catch (error) {
     console.error('❌ Error creating counterparty:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================================================
+// PUT /api/crm/counterparties/:id — Обновление контрагента
+// ============================================================================
+router.put('/counterparties/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { 
+      fio, company_name, phone, email, inn, kpp, ogrn,
+      address, legal_address, bank_name, bank_account, 
+      correspondent_account, bik, type, loyalty_level 
+    } = req.body;
+
+    // Проверяем существование
+    const check = await pool.query('SELECT id FROM counterparties WHERE id = $1', [id]);
+    if (check.rows.length === 0) {
+      return res.status(404).json({ error: 'Клиент не найден' });
+    }
+
+    const result = await pool.query(`
+      UPDATE counterparties SET
+        fio = $1,
+        company_name = $2,
+        phone = $3,
+        email = $4,
+        inn = $5,
+        kpp = $6,
+        ogrn = $7,
+        address = $8,
+        legal_address = $9,
+        bank_name = $10,
+        bank_account = $11,
+        correspondent_account = $12,
+        bik = $13,
+        type = $14,
+        loyalty_level = $15,
+        updated_at = NOW()
+      WHERE id = $16
+      RETURNING id, fio, company_name, phone, email, inn, kpp, ogrn, 
+                address, legal_address, bank_name, bank_account, 
+                correspondent_account, bik, type, loyalty_level, 
+                created_at, updated_at
+    `, [
+      fio || null,
+      company_name || null,
+      phone || null,
+      email || null,
+      inn || null,
+      kpp || null,
+      ogrn || null,
+      address || null,
+      legal_address || null,
+      bank_name || null,
+      bank_account || null,
+      correspondent_account || null,
+      bik || null,
+      type || 'individual',
+      loyalty_level || 'bronze',
+      id
+    ]);
+
+    console.log('✅ Counterparty updated:', result.rows[0].fio || result.rows[0].company_name);
+
+    res.json({
+      success: true,
+      message: 'Клиент обновлён',
+      counterparty: result.rows[0]
+    });
+
+  } catch (error) {
+    console.error('❌ Error updating counterparty:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================================================
+// DELETE /api/crm/counterparties/:id — Удаление контрагента
+// ============================================================================
+router.delete('/counterparties/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Проверяем, нет ли у клиента заказ-нарядов
+    const ordersCheck = await pool.query(
+      'SELECT COUNT(*) as count FROM work_orders WHERE customer_id = $1', 
+      [id]
+    );
+
+    if (parseInt(ordersCheck.rows[0].count) > 0) {
+      return res.status(400).json({ 
+        error: `Нельзя удалить клиента: у него есть ${ordersCheck.rows[0].count} заказ-наряд(ов). Сначала перенесите их другому клиенту.` 
+      });
+    }
+
+    const result = await pool.query('DELETE FROM counterparties WHERE id = $1 RETURNING id', [id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Клиент не найден' });
+    }
+
+    console.log('✅ Counterparty deleted:', id);
+
+    res.json({
+      success: true,
+      message: 'Клиент удалён'
+    });
+
+  } catch (error) {
+    console.error('❌ Error deleting counterparty:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -664,11 +777,19 @@ router.get('/work-orders', async (req, res) => {
   try {
     const { search, status, customer_id, date_from, date_to, limit = 50, offset = 0 } = req.query;
     
+    // 🔥 ДОБАВЛЕНО: извлекаем brand/model/year из vehicle_info и добавляем assigned_master_name
     let query = `
       SELECT wo.id, wo.order_number, wo.status, wo.promised_at, wo.completed_at,
             wo.vehicle_info, wo.complaint, wo.notes, wo.final_total,
             cp.company_name, cp.fio, cp.phone,
             u.username as master_name,
+            u.username as assigned_master_name,
+            u.full_name as assigned_master_full_name,
+            COALESCE(wo.vehicle_info->>'brand', '') AS brand,
+            COALESCE(wo.vehicle_info->>'model', '') AS model,
+            COALESCE(wo.vehicle_info->>'year', '') AS year,
+            COALESCE(wo.vehicle_info->>'vin', '') AS vin,
+            COALESCE(wo.vehicle_info->>'license_plate', '') AS license_plate,
             wo.created_at, wo.updated_at
       FROM work_orders wo
       LEFT JOIN counterparties cp ON wo.customer_id = cp.id

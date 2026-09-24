@@ -17,6 +17,7 @@ import suppliersRouter from './routes/suppliers.js';
 import soldPartsRouter from './routes/sold-parts.js';
 import incomeSummaryRouter from './routes/income-summary.js';
 import addUserRouter from './routes/add-user.js';
+import stockRouter from './routes/stock.js';
 import photosRoutes from './routes/photos.js';
 import logsRoutes from './routes/logs.js';
 import { httpLogger } from './utils/logger.js';
@@ -91,6 +92,7 @@ app.use(servicesRoutes);
 app.use('/api/crm/customers', customersRoutes);    // ← добавьте
 app.use('/api/users', usersRoutes);                // ← добавьте
 app.use('/api/settings', settingsRouter);
+app.use('/api/stock', stockRouter);
 // <<<--- Маршрут для получения логов --->
 app.get('/api/node-logs', (req, res) => {
   try {

@@ -22,6 +22,7 @@ function Sidebar({
     console.log('Sidebar isOpen:', isOpen);
   }, [isOpen]);
 
+  // === ФУНКЦИИ НАВИГАЦИИ ===
   const goToAdminPanel = () => {
     navigate('/admin-panel');
     onClose();
@@ -37,8 +38,13 @@ function Sidebar({
     onClose();
   };
 
+  // 🔥 НОВАЯ ФУНКЦИЯ ДЛЯ ПЕРЕХОДА К ОСТАТКАМ
+  const goToStockByLocations = () => {
+    navigate('/stock/by-locations');
+    onClose();
+  };
+
   // === СТИЛИ ===
-  
   const sidebarStyle = {
     position: 'fixed',
     top: 0,
@@ -218,6 +224,30 @@ function Sidebar({
             </a>
           </li>
 
+          {/* 🔥 ИСПРАВЛЕННЫЙ ПУНКТ: Остаток по складам */}
+          <li style={menuItemStyle}>
+            <a
+              onClick={(e) => {
+                e.preventDefault();
+                goToStockByLocations(); // Используем функцию навигации
+              }}
+              style={menuLinkStyle}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(255,255,255,0.15)';
+                e.currentTarget.style.border = '1px solid rgba(255,255,255,0.2)';
+                e.currentTarget.style.transform = 'translateX(5px)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'transparent';
+                e.currentTarget.style.border = '1px solid transparent';
+                e.currentTarget.style.transform = 'translateX(0)';
+              }}
+            >
+              <span style={iconStyle}>📊</span>
+              <span>Остаток по складам</span>
+            </a>
+          </li>
+
           <li style={menuItemStyle}>
             <a
               onClick={(e) => {
@@ -317,7 +347,6 @@ function Sidebar({
                 </a>
               </li>
 
-              {/* 🔥 НОВЫЙ ПУНКТ: Настройки системы */}
               <li style={menuItemStyle}>
                 <a
                   onClick={(e) => {

@@ -20,10 +20,11 @@ import CrmDashboard from './components/CrmDashboard';
 import WorkOrdersList from './components/WorkOrdersList';
 import WorkOrderDetail from './components/WorkOrderDetail';
 import WorkOrderForm from './components/WorkOrderForm';
-import CustomerList from './components/CustomerList';
+import CustomersPage from './components/CustomersPage.jsx';
 import CustomerDetail from './components/CustomerDetail';
 import Settings from './components/Settings.jsx';
 import InDevelopment from './components/InDevelopment.jsx';
+import StockByLocationPage from './components/StockByLocationPage.jsx';
 
 
 // ============================================================================
@@ -146,6 +147,9 @@ function App() {
             </PrivateRoute>
           } />
 
+          <Route path="/stock/by-locations" element={
+            <StockByLocationPage token={token} />} />
+
           <Route path="/platforms" element={
             <PrivateRoute>
               <InDevelopment token={token} />
@@ -173,11 +177,7 @@ function App() {
               <WorkOrderDetail token={token} />
             </PrivateRoute>
           } />
-          <Route path="/crm/customers" element={
-            <PrivateRoute>
-              <InDevelopment token={token} />
-            </PrivateRoute>
-          } />
+          <Route path="/crm/customers" element={<CustomersPage token={token} />} />   
           <Route path="/crm/customers/:id" element={
             <PrivateRoute>
               <CustomerDetail token={token} />

@@ -21,12 +21,31 @@ router.get('/', async (req, res) => {
         i.part_number,
         i.qr_code,
         m.quantity,
+        
+        -- 🔥 ID складов с множественными алиасами
+        m.from_location_id,
         m.from_location_id AS source_location_id,
-        l1.name AS source_name,
+        m.to_location_id,
         m.to_location_id AS target_location_id,
+        
+        -- 🔥 Названия складов со ВСЕМИ возможными именами, которые может ждать фронтенд
+        l1.name AS source_name,
+        l1.name AS from_location_name,
+        l1.name AS source_location_name,
+        l1.name AS from_name,
+        l1.name AS source,
+        
         l2.name AS target_name,
+        l2.name AS to_location_name,
+        l2.name AS target_location_name,
+        l2.name AS to_name,
+        l2.name AS target,
+        
         m.comment AS notes,
-        m.moved_at AS date
+        m.comment AS comment,
+        m.moved_at AS date,
+        m.moved_at AS moved_at,
+        m.moved_at AS created_at
       FROM movements m
       LEFT JOIN items i ON m.item_id = i.id
       LEFT JOIN locations l1 ON m.from_location_id = l1.id
@@ -89,16 +108,13 @@ router.post('/', async (req, res) => {
       WHERE qr_code = $2 AND location_id = $3
     `, [quantity, qr_code, from_location_id]);
 
-    // 4. ОПРИХОДУЕМ НА СКЛАД-НАЗНАЧЕНИЕ (ИСПРАВЛЕНО: используем ON CONFLICT)
-    // Так как qr_code уникален глобально, мы обновляем существующую запись, 
-    // прибавляя количество и меняя её location_id на целевой.
+    // 4. ОПРИХОДУЕМ НА СКЛАД-НАЗНАЧЕНИЕ (ИСПРАВЛЕНО: ON CONFLICT по паре полей)
     await client.query(`
       INSERT INTO items (name, part_number, category_id, qr_code, quantity, location_id, created_at, updated_at)
       VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
-      ON CONFLICT (qr_code) 
+      ON CONFLICT (qr_code, location_id) 
       DO UPDATE SET 
         quantity = items.quantity + EXCLUDED.quantity,
-        location_id = EXCLUDED.location_id,
         updated_at = NOW()
     `, [
       sourceItem.name, 
