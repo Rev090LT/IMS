@@ -1,5 +1,6 @@
 // IMS/src/App.jsx
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 import ScanPage from './components/ScanPage';
@@ -22,18 +23,64 @@ import WorkOrderDetail from './components/WorkOrderDetail';
 import WorkOrderForm from './components/WorkOrderForm';
 import CustomersPage from './components/CustomersPage.jsx';
 import CustomerDetail from './components/CustomerDetail';
-import Settings from './components/Settings.jsx';
+import SetupPage from './components/SetupPage.jsx';
 import InDevelopment from './components/InDevelopment.jsx';
 import StockByLocationPage from './components/StockByLocationPage.jsx';
-
+import Settings from './components/Settings.jsx';
+import RootRedirect from './components/RootRedirect.jsx'; // <-- Умный редирект уже импортирован
 
 // ============================================================================
-// ROUTE GUARDS (должны быть ДО функции App)
+// ROUTE GUARDS
 // ============================================================================
 
 const PrivateRoute = ({ children }) => {
   const token = localStorage.getItem('token');
-  return token ? children : <Navigate to="/login" replace />;
+  const [isConfigured, setIsConfigured] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const checkSetup = async () => {
+      try {
+        const response = await fetch(`/api/settings/check?t=${Date.now()}`);
+        const data = await response.json();
+        setIsConfigured(data.isConfigured === true);
+      } catch (error) {
+        console.error('Ошибка проверки настройки:', error);
+        setIsConfigured(false);
+      } finally {
+        setLoading(false);
+      }
+    };
+    checkSetup();
+  }, []);
+
+  if (loading) {
+    return (
+      <div style={{ 
+        minHeight: '100vh', 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center',
+        backgroundColor: '#f5f7fa',
+        fontSize: '18px',
+        color: '#666'
+      }}>
+        ⏳ Проверка системы...
+      </div>
+    );
+  }
+
+  // Если система сброшена — редирект на /setup, даже если токен есть
+  if (isConfigured === false) {
+    return <Navigate to="/setup" replace />;
+  }
+
+  // Если система настроена, но токена нет — редирект на /login
+  if (!token) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return children;
 };
 
 const PublicRoute = ({ children }) => {
@@ -46,18 +93,22 @@ const PublicRoute = ({ children }) => {
 // ============================================================================
 
 function App() {
-  // Функции-заглушки для модальных окон AdminPanelPage
   const openSQLConsole = () => alert('Открытие SQL консоли');
   const openNodeLogConsole = () => alert('Открытие Node.js Log Console');
   const openAddUserModal = () => alert('Открытие модального окна создания пользователя');
 
-  // Получаем токен один раз для использования в роутах
   const token = localStorage.getItem('token');
 
   return (
     <Router>
       <div className="App">
         <Routes>
+          {/* 🔥 ИЗМЕНЕНИЕ ЗДЕСЬ: Умный редирект вместо жесткого Navigate to="/dashboard" */}
+          <Route path="/" element={<RootRedirect />} />
+          
+          {/* Страница настройки (без защиты) */}
+          <Route path="/setup" element={<SetupPage />} />
+
           {/* === ПУБЛИЧНЫЕ РОУТЫ === */}
           <Route path="/login" element={
             <PublicRoute>
@@ -116,7 +167,6 @@ function App() {
               <MovementHistoryPage token={token} />
             </PrivateRoute>
           } />
-
           <Route path="/sell-part" element={
             <PrivateRoute>
               <SellPartPage token={token} />
@@ -148,7 +198,10 @@ function App() {
           } />
 
           <Route path="/stock/by-locations" element={
-            <StockByLocationPage token={token} />} />
+            <PrivateRoute>
+              <StockByLocationPage token={token} />
+            </PrivateRoute>
+          } />
 
           <Route path="/platforms" element={
             <PrivateRoute>
@@ -156,7 +209,7 @@ function App() {
             </PrivateRoute>
           } />
 
-          {/* === CRM РОУТЫ (только один раз!) === */}
+          {/* === CRM РОУТЫ === */}
           <Route path="/crm" element={
             <PrivateRoute>
               <InDevelopment token={token} />
@@ -177,16 +230,28 @@ function App() {
               <WorkOrderDetail token={token} />
             </PrivateRoute>
           } />
-          <Route path="/crm/customers" element={<CustomersPage token={token} />} />   
+          <Route path="/crm/customers" element={
+            <PrivateRoute>
+              <CustomersPage token={token} />
+            </PrivateRoute>
+          } />   
           <Route path="/crm/customers/:id" element={
             <PrivateRoute>
               <CustomerDetail token={token} />
             </PrivateRoute>
           } />
-          <Route path="/crm/work-orders/:id/edit" element={<WorkOrderForm token={token} />} />    
-          <Route path="/settings" element={<Settings token={token} />} />
+          <Route path="/crm/work-orders/:id/edit" element={
+            <PrivateRoute>
+              <WorkOrderForm token={token} />
+            </PrivateRoute>
+          } />    
+          <Route path="/settings" element={
+            <PrivateRoute>
+              <Settings token={token} />
+            </PrivateRoute>
+          } />
+
           {/* === REDIRECTS === */}
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </div>

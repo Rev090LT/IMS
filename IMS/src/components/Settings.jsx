@@ -36,6 +36,9 @@ function Settings({ token }) {
   });
   const [pagination, setPagination] = useState({ page: 1, limit: 50, total: 0 });
 
+  // === УПРАВЛЕНИЕ СИСТЕМОЙ (НОВОЕ) ===
+  const [systemActionLoading, setSystemActionLoading] = useState(false);
+
   // ==================== НАСТРОЙКИ: ФУНКЦИИ ====================
   
   useEffect(() => {
@@ -272,6 +275,84 @@ function Settings({ token }) {
       }
     } catch (err) {
       alert('❌ Ошибка при очистке логов');
+    }
+  };
+
+  // ==================== УПРАВЛЕНИЕ СИСТЕМОЙ (НОВЫЕ ФУНКЦИИ) ====================
+
+  const handleRestart = async () => {
+    if (!window.confirm('🔄 Вы уверены, что хотите перезагрузить систему?\n\nЭто очистит кэш и сбросит активные сессии.')) {
+      return;
+    }
+
+    setSystemActionLoading(true);
+    try {
+      const response = await fetch('/api/settings/restart', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        alert('✅ ' + data.message);
+        window.location.reload(); // Перезагружаем страницу
+      } else {
+        alert('❌ Ошибка: ' + data.error);
+      }
+    } catch (error) {
+      console.error('Error restarting system:', error);
+      alert('❌ Ошибка сети');
+    } finally {
+      setSystemActionLoading(false);
+    }
+  };
+
+  const handleReset = async () => {
+    const confirmText = window.prompt(
+      '⚠️ ВНИМАНИЕ! Это действие удалит ВСЕ данные системы!\n\n' +
+      'Для подтверждения введите: RESET_ALL_DATA\n\n' +
+      'Это действие необратимо!'
+    );
+
+    if (confirmText !== 'RESET_ALL_DATA') {
+      if (confirmText !== null) {
+        alert('❌ Неверный код подтверждения. Сброс отменен.');
+      }
+      return;
+    }
+
+    setSystemActionLoading(true);
+    try {
+      const response = await fetch('/api/settings/reset', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ confirmReset: 'RESET_ALL_DATA' })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // 1. Мгновенно очищаем ВСЕ хранилища
+        localStorage.clear();
+        sessionStorage.clear();
+        
+        // 2. Мгновенный редирект без записи в историю (предотвращает повторные запросы)
+        window.location.replace('/setup');
+      } else {
+        alert('❌ Ошибка: ' + data.error);
+        setSystemActionLoading(false);
+      }
+    } catch (error) {
+      console.error('Error resetting system:', error);
+      alert('❌ Ошибка сети');
+      setSystemActionLoading(false);
     }
   };
 
@@ -576,6 +657,13 @@ function Settings({ token }) {
                 style={getTabStyle(activeSection, 'addUser')}
               >
                 👤 Создать пользователя
+              </button>
+              {/* 🔥 НОВАЯ ВКЛАДКА */}
+              <button
+                onClick={() => setActiveSection('systemManagement')}
+                style={getTabStyle(activeSection, 'systemManagement')}
+              >
+                🚨 Управление системой
               </button>
             </div>
 
@@ -908,6 +996,69 @@ function Settings({ token }) {
                 </form>
               </div>
             )}
+
+            {/* 🔥 НОВОЕ: Управление системой (Перезагрузка и Сброс) */}
+            {activeSection === 'systemManagement' && (
+              <div style={panelStyle}>
+                <h3 style={{ marginTop: 0, color: '#e74c3c' }}>🚨 Управление системой</h3>
+                <p style={{ color: '#666', fontSize: '14px', marginBottom: '20px' }}>
+                  Опасные действия, требующие прав администратора. Используйте с осторожностью.
+                </p>
+                
+                <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
+                  {/* Карточка перезагрузки */}
+                  <div style={{ flex: 1, minWidth: '250px', padding: '20px', backgroundColor: '#fff3cd', borderRadius: '8px', border: '1px solid #ffc107' }}>
+                    <h4 style={{ marginTop: 0, color: '#856404' }}>🔄 Перезагрузка системы</h4>
+                    <p style={{ fontSize: '13px', color: '#856404', marginBottom: '15px' }}>
+                      Очистит кэш приложения и сбросит активные пользовательские сессии. Данные не будут удалены.
+                    </p>
+                    <button
+                      onClick={handleRestart}
+                      disabled={systemActionLoading}
+                      style={{
+                        width: '100%',
+                        padding: '10px',
+                        backgroundColor: systemActionLoading ? '#95a5a6' : '#f39c12',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: systemActionLoading ? 'not-allowed' : 'pointer',
+                        fontWeight: '600',
+                        transition: 'background 0.2s'
+                      }}
+                    >
+                      {systemActionLoading ? '⏳ Выполняется...' : '🔄 Перезагрузить'}
+                    </button>
+                  </div>
+
+                  {/* Карточка полного сброса */}
+                  <div style={{ flex: 1, minWidth: '250px', padding: '20px', backgroundColor: '#f8d7da', borderRadius: '8px', border: '1px solid #f5c6cb' }}>
+                    <h4 style={{ marginTop: 0, color: '#721c24' }}>⚠️ Полный сброс системы</h4>
+                    <p style={{ fontSize: '13px', color: '#721c24', marginBottom: '15px' }}>
+                      <strong>НЕОБРАТИМО!</strong> Удалит ВСЕ товары, заказы, клиентов и настройки. Вернет систему к состоянию первоначальной установки.
+                    </p>
+                    <button
+                      onClick={handleReset}
+                      disabled={systemActionLoading}
+                      style={{
+                        width: '100%',
+                        padding: '10px',
+                        backgroundColor: systemActionLoading ? '#95a5a6' : '#dc3545',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: systemActionLoading ? 'not-allowed' : 'pointer',
+                        fontWeight: '600',
+                        transition: 'background 0.2s'
+                      }}
+                    >
+                      {systemActionLoading ? '⏳ Выполняется...' : '⚠️ Полный сброс'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
           </div>
         )}
       </div>

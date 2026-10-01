@@ -82,7 +82,7 @@ app.use('/api/sold-parts', soldPartsRouter);
 app.use('/api/income-summary', incomeSummaryRouter);
 app.use('/api/add-user', addUserRouter);
 app.use('/api/photos', photosRoutes);
-app.use('/uploads', express.static('uploads'));
+app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 app.use(httpLogger); // Логирование всех HTTP запросов
 app.use('/api/logs', logsRoutes);
 app.use('/api/appointments', appointmentsRoutes);
@@ -93,6 +93,7 @@ app.use('/api/crm/customers', customersRoutes);    // ← добавьте
 app.use('/api/users', usersRoutes);                // ← добавьте
 app.use('/api/settings', settingsRouter);
 app.use('/api/stock', stockRouter);
+
 // <<<--- Маршрут для получения логов --->
 app.get('/api/node-logs', (req, res) => {
   try {

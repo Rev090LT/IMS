@@ -83,7 +83,8 @@ INSERT INTO system_settings (setting_key, setting_value, setting_type, category,
 ('tax_rate', '0', 'number', 'billing', 'Налоговая ставка (%)'),
 ('discount_enabled', 'true', 'boolean', 'billing', 'Разрешить скидки'),
 ('auto_backup_enabled', 'false', 'boolean', 'system', 'Автоматическое резервное копирование'),
-('debug_mode', 'false', 'boolean', 'system', 'Режим отладки');
+('debug_mode', 'false', 'boolean', 'system', 'Режим отладки'),
+('is_configured', 'false', 'boolean', 'system', 'Флаг: пройдена ли первоначальная настройка');
 
 COMMENT ON TABLE system_settings IS 'Централизованное хранилище настроек системы';
 
@@ -642,6 +643,28 @@ CREATE TABLE IF NOT EXISTS system_logs (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- ============================================================================
+-- 2.4.x Совместимость запчастей с автомобилями
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS part_compatibility (
+    id SERIAL PRIMARY KEY,
+    item_id INTEGER NOT NULL,
+    compatible_brand VARCHAR(100) NOT NULL,
+    compatible_model VARCHAR(100) NOT NULL,
+    compatible_generation VARCHAR(100),
+    year_from INTEGER,
+    year_to INTEGER,
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    -- Внешний ключ на таблицу товаров (items)
+    CONSTRAINT fk_part_compatibility_item FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE,
+    
+    -- Защита от дублирования одной и той же совместимости для одной запчасти
+    UNIQUE(item_id, compatible_brand, compatible_model, compatible_generation)
+);
+
 
 -- ============================================================================
 -- 3. FOREIGN KEYS (Внешние ключи)
@@ -706,7 +729,7 @@ ALTER TABLE customer_notifications ADD CONSTRAINT fk_notifications_work_order FO
 
 -- 3.9 Логи
 ALTER TABLE user_activity_logs ADD CONSTRAINT fk_logs_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL;
-
+ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
 
 -- ============================================================================
 -- 4. INDEXES (Индексы)
@@ -788,7 +811,8 @@ CREATE INDEX IF NOT EXISTS idx_logs_created_at ON user_activity_logs(created_at 
 CREATE INDEX IF NOT EXISTS idx_logs_entity ON user_activity_logs(entity_type, entity_id);
 CREATE INDEX IF NOT EXISTS idx_system_logs_level ON system_logs(level);
 CREATE INDEX IF NOT EXISTS idx_system_logs_created_at ON system_logs(created_at DESC);
-
+CREATE INDEX IF NOT EXISTS idx_part_compatibility_item ON part_compatibility(item_id);
+CREATE INDEX IF NOT EXISTS idx_part_compatibility_car ON part_compatibility(compatible_brand, compatible_model);
 
 -- ============================================================================
 -- 5. CONSTRAINTS (Проверочные ограничения)
@@ -1029,10 +1053,6 @@ CREATE TRIGGER trg_car_platforms_updated_at BEFORE UPDATE ON car_platforms FOR E
 -- 9. DEFAULT DATA (Стартовые данные)
 -- ============================================================================
 
-INSERT INTO users (username, email, password_hash, role, full_name) VALUES 
-('admin', 'admin@ims.local', '$2a$12$Su4wgOX.RUfuM/G42zrvzOfNXWikliIoyBIbSa5Ge62nBOQpFNIXK', 'admin', 'Администратор Системы')
-ON CONFLICT (email) DO NOTHING;
-
 INSERT INTO locations (name, description) VALUES 
 ('Основной склад', 'Главный склад компании'),
 ('Резервный склад', 'Дополнительное хранилище'),
@@ -1111,6 +1131,48 @@ COMMENT ON COLUMN work_order_items.total_price IS 'Вычисляемое пол
 COMMENT ON COLUMN work_order_items.item_type IS 'labor=Работа, part=Запчасть, material=Материал, service=Услуга';
 COMMENT ON COLUMN work_order_items.use_fixed_rate IS 'Режим расчёта цены работы: TRUE=по тарифу (часы × ставка), FALSE=своя цена';
 COMMENT ON COLUMN system_settings.setting_key IS 'Ключ настройки: hourly_rate, nds_rate, warranty_work_days и т.д.';
+
+-- ============================================================================
+-- 11. БЕЗОПАСНЫЕ МИГРАЦИИ (Для обновления существующих баз без потери данных)
+-- ============================================================================
+-- Используем IF NOT EXISTS, чтобы скрипт не падал, если колонки уже есть
+ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name VARCHAR(255);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;
+
+ALTER TABLE counterparties ADD COLUMN IF NOT EXISTS bank_name VARCHAR(255);
+ALTER TABLE counterparties ADD COLUMN IF NOT EXISTS bank_account VARCHAR(50);
+ALTER TABLE counterparties ADD COLUMN IF NOT EXISTS correspondent_account VARCHAR(50);
+ALTER TABLE counterparties ADD COLUMN IF NOT EXISTS bik VARCHAR(20);
+
+ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS apply_nds BOOLEAN DEFAULT FALSE;
+ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS nds_amount DECIMAL(12,2) DEFAULT 0;
+ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS nds_rate DECIMAL(5,2) DEFAULT 0;
+
+ALTER TABLE work_order_items ADD COLUMN IF NOT EXISTS use_fixed_rate BOOLEAN DEFAULT TRUE;
+
+-- Безопасное обновление ограничения уникальности для items
+-- Используем DO блок с проверкой существования
+DO $$
+BEGIN
+    -- Удаляем старые ограничения, если они есть
+    ALTER TABLE items DROP CONSTRAINT IF EXISTS items_qr_code_key;
+    ALTER TABLE items DROP CONSTRAINT IF EXISTS items_qr_location_unique;
+    
+    -- Проверяем, существует ли уже нужное ограничение
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint 
+        WHERE conname = 'items_qr_location_unique'
+    ) THEN
+        ALTER TABLE items ADD CONSTRAINT items_qr_location_unique UNIQUE (qr_code, location_id);
+    END IF;
+END $$;
+
+-- Безопасное обновление ограничений статусов
+ALTER TABLE work_orders DROP CONSTRAINT IF EXISTS chk_wo_status;
+ALTER TABLE work_orders ADD CONSTRAINT chk_wo_status CHECK (status IN ('draft', 'accepted', 'in_progress', 'waiting_parts', 'ready', 'completed', 'closed', 'cancelled', 'archived'));
+
+ALTER TABLE counterparties DROP CONSTRAINT IF EXISTS chk_counterparty_type;
+ALTER TABLE counterparties ADD CONSTRAINT chk_counterparty_type CHECK (type IN ('individual', 'legal', 'vip', 'partner', 'supplier', 'customer'));
 
 
 -- ============================================================================
